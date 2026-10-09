@@ -173,7 +173,44 @@ class AppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(labels, ["360p", "1080p"])
         self.assertEqual(len(payload["choices"]["audio"]), 4)
+        self.assertEqual(payload["choices"]["audio"][0]["label"], "Audio sumber · 128 kbps")
+        self.assertEqual(payload["choices"]["audio"][0]["detail"], "AAC / M4A · tanpa konversi · sekitar 1.9 MB")
         self.assertTrue(payload["choices"]["video"][0]["download_url"].startswith("/api/download/"))
+
+    def test_video_size_uses_bitrate_when_filesize_is_missing(self):
+        formats = [
+            {
+                "height": 720,
+                "ext": "mp4",
+                "vcodec": "avc1.4D401F",
+                "acodec": "none",
+                "tbr": 1_000,
+            },
+            {
+                "ext": "m4a",
+                "vcodec": "none",
+                "acodec": "mp4a.40.2",
+                "abr": 128,
+            },
+        ]
+
+        self.assertEqual(media_app._estimated_video_size(formats, 720, 100), 14_100_000)
+
+    def test_video_size_is_unknown_instead_of_showing_audio_only(self):
+        formats = [
+            {"height": 720, "ext": "mp4", "vcodec": "avc1", "acodec": "none"},
+            {"ext": "m4a", "vcodec": "none", "acodec": "aac", "filesize": 2_000_000},
+        ]
+
+        self.assertIsNone(media_app._estimated_video_size(formats, 720))
+
+    def test_best_audio_prefers_highest_source_bitrate(self):
+        selected = media_app._best_audio_format([
+            {"format_id": "m4a", "ext": "m4a", "vcodec": "none", "acodec": "aac", "abr": 128},
+            {"format_id": "opus", "ext": "webm", "vcodec": "none", "acodec": "opus", "abr": 160},
+        ])
+
+        self.assertEqual(selected["format_id"], "opus")
 
     def test_video_selector_prioritizes_requested_resolution(self):
         selector = media_app._video_format_selector(2160)

@@ -14,17 +14,17 @@
     :root {
       color-scheme: light;
       --ink: #172033;
-      --muted: #626b7d;
-      --canvas: #e9eef5;
-      --panel: #fbfcfe;
+      --muted: #667085;
+      --canvas: #f3f6fb;
+      --panel: #ffffff;
       --panel-strong: #ffffff;
-      --line: #cbd4e0;
+      --line: #d7dfeb;
       --accent: #ff5c3b;
       --accent-ink: #ffffff;
       --signal: #3157d5;
       --signal-soft: #dfe7ff;
       --danger: #b92f2f;
-      --radius: 20px;
+      --radius: 24px;
     }
 
     * { box-sizing: border-box; }
@@ -33,12 +33,11 @@
       margin: 0;
       min-height: 100vh;
       color: var(--ink);
-      font-family: "Avenir Next", Avenir, "Segoe UI", ui-sans-serif, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", ui-sans-serif, sans-serif;
       background:
-        linear-gradient(rgba(49, 87, 213, .055) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(49, 87, 213, .055) 1px, transparent 1px),
+        radial-gradient(circle at 12% 8%, rgba(49, 87, 213, .12), transparent 28rem),
+        radial-gradient(circle at 88% 16%, rgba(255, 92, 59, .09), transparent 24rem),
         var(--canvas);
-      background-size: 28px 28px;
       -webkit-font-smoothing: antialiased;
     }
 
@@ -60,7 +59,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 58px;
+      margin-bottom: 48px;
     }
 
     .brand {
@@ -88,8 +87,8 @@
       gap: 8px;
       padding: 8px 11px;
       color: #445069;
-      background: rgba(255, 255, 255, .68);
-      border: 1px solid #bdc7d6;
+      background: rgba(255, 255, 255, .78);
+      border: 1px solid var(--line);
       border-radius: 999px;
       font-size: 12px;
     }
@@ -106,8 +105,8 @@
       display: grid;
       grid-template-columns: minmax(0, 1.25fr) minmax(260px, .75fr);
       align-items: center;
-      gap: clamp(36px, 7vw, 86px);
-      margin-bottom: 40px;
+      gap: clamp(32px, 6vw, 72px);
+      margin-bottom: 42px;
     }
 
     .hero-copy { max-width: 720px; }
@@ -133,7 +132,7 @@
     h1 {
       max-width: 720px;
       margin: 0;
-      font-size: clamp(46px, 7vw, 76px);
+      font-size: clamp(44px, 6.4vw, 68px);
       font-weight: 720;
       line-height: .99;
       letter-spacing: -.055em;
@@ -165,58 +164,41 @@
     }
 
     .transfer-visual {
-      position: relative;
-      min-height: 290px;
-      border-left: 2px solid var(--signal);
+      display: grid;
+      gap: 10px;
+      padding: 14px;
+      background: #18223a;
+      border: 1px solid rgba(255, 255, 255, .08);
+      border-radius: 24px;
+      box-shadow: 0 24px 60px rgba(23, 32, 51, .18);
     }
-
-    .transfer-visual::before,
-    .transfer-visual::after {
-      content: "";
-      position: absolute;
-      left: -6px;
-      width: 10px;
-      height: 10px;
-      background: var(--accent);
-      border: 3px solid var(--canvas);
-      border-radius: 50%;
-    }
-
-    .transfer-visual::before { top: 15px; }
-    .transfer-visual::after { bottom: 15px; }
 
     .media-slip {
-      position: absolute;
-      left: 28px;
-      width: min(240px, calc(100% - 28px));
-      padding: 18px;
+      width: 100%;
+      padding: 16px;
       color: var(--ink);
-      background: var(--panel-strong);
-      border: 1px solid #bbc6d5;
-      border-radius: 4px 18px 18px 18px;
-      box-shadow: 10px 12px 0 rgba(49, 87, 213, .11);
+      background: rgba(255, 255, 255, .96);
+      border: 1px solid rgba(255, 255, 255, .7);
+      border-radius: 15px;
     }
 
-    .media-slip:nth-child(1) { top: 12px; transform: rotate(-2deg); }
-    .media-slip:nth-child(2) { top: 103px; left: 56px; transform: rotate(2deg); }
-    .media-slip:nth-child(3) { top: 194px; left: 37px; transform: rotate(-1deg); }
-    .media-slip span { color: var(--signal); font-size: 11px; font-weight: 750; }
-    .media-slip strong { display: block; margin-top: 5px; font-size: 16px; }
+    .media-slip span { color: var(--signal); font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+    .media-slip strong { display: block; margin-top: 4px; font-size: 15px; }
     .media-slip i {
       display: block;
       width: var(--meter, 76%);
       height: 5px;
       margin-top: 12px;
-      background: var(--accent);
+      background: linear-gradient(90deg, var(--signal), #7b96ff);
       border-radius: 999px;
     }
 
     .card {
       padding: clamp(18px, 4vw, 30px);
       background: var(--panel);
-      border: 1px solid #c2ccda;
+      border: 1px solid var(--line);
       border-radius: var(--radius);
-      box-shadow: 0 24px 60px rgba(42, 62, 105, .14);
+      box-shadow: 0 22px 55px rgba(42, 62, 105, .11);
     }
 
     .input-label {
@@ -233,7 +215,7 @@
       gap: 10px;
       padding: 8px;
       background: white;
-      border: 1px solid #b9c4d3;
+      border: 1px solid #cbd5e3;
       border-radius: 16px;
       transition: border-color .2s, box-shadow .2s;
     }
@@ -370,7 +352,7 @@
       display: flex;
       gap: 6px;
       padding: 4px;
-      background: #e7ecf3;
+      background: #edf1f7;
       border-radius: 12px;
     }
 
@@ -401,12 +383,12 @@
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      min-height: 68px;
-      padding: 12px 13px;
+      min-height: 72px;
+      padding: 14px;
       color: var(--ink);
       background: white;
-      border: 1px solid #c5cfdb;
-      border-radius: 12px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
       text-decoration: none;
       transition: border-color .15s, transform .15s, background .15s;
     }
@@ -417,17 +399,27 @@
       transform: translateY(-1px);
     }
 
-    .choice strong { display: block; font-size: 13px; }
-    .choice small { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
-    .choice-arrow { color: var(--signal); font-size: 19px; }
+    .choice strong { display: block; font-size: 14px; }
+    .choice small { display: block; margin-top: 5px; color: var(--muted); font-size: 11px; line-height: 1.45; }
+    .choice-arrow {
+      display: grid;
+      flex: 0 0 auto;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      color: var(--signal);
+      background: var(--signal-soft);
+      border-radius: 10px;
+      font-size: 18px;
+    }
 
     .download-progress {
       display: none;
       margin-top: 14px;
-      padding: 15px;
-      background: #eef2f8;
-      border: 1px solid #c5cfdb;
-      border-radius: 13px;
+      padding: 17px;
+      background: #f5f7fb;
+      border: 1px solid var(--line);
+      border-radius: 16px;
     }
 
     .download-progress.visible { display: block; }
@@ -460,24 +452,23 @@
     }
 
     .progress-detail {
-      min-height: 17px;
-      margin: 9px 0 0;
+      margin: 0;
       color: var(--muted);
-      font-size: 11px;
+      font-size: 12px;
+      line-height: 1.5;
     }
 
     .progress-foot {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+      display: grid;
       gap: 12px;
+      margin-top: 13px;
     }
 
     .progress-cancel {
       display: none;
       flex: 0 0 auto;
-      min-height: 36px;
-      padding: 0 12px;
+      min-height: 42px;
+      padding: 0 15px;
       color: #8d2323;
       background: transparent;
       border: 1px solid #dfaaa5;
@@ -491,15 +482,17 @@
 
     .progress-actions {
       display: flex;
-      flex: 0 0 auto;
       align-items: center;
+      justify-content: flex-end;
       gap: 8px;
+      padding-top: 12px;
+      border-top: 1px solid var(--line);
     }
 
     .progress-save {
       display: none;
-      min-height: 38px;
-      padding: 0 14px;
+      min-height: 42px;
+      padding: 0 16px;
       color: #fff;
       background: var(--signal);
       border: 1px solid var(--signal);
@@ -526,17 +519,18 @@
     .fineprint {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-      margin-top: 18px;
+      gap: 14px;
+      margin-top: 20px;
     }
 
     .fineprint-item {
-      padding: 16px;
       color: var(--muted);
-      border-left: 3px solid #b9c5d7;
-      padding: 4px 0 4px 14px;
+      background: rgba(255, 255, 255, .7);
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      padding: 17px;
       font-size: 12px;
-      line-height: 1.5;
+      line-height: 1.6;
     }
 
     .fineprint-item strong { display: block; margin-bottom: 5px; color: #34405a; }
@@ -553,11 +547,8 @@
       .topbar { margin-bottom: 42px; }
       .status-pill { display: none; }
       .hero { grid-template-columns: 1fr; gap: 28px; }
-      .transfer-visual { min-height: 190px; margin-left: 8px; }
-      .media-slip { padding: 13px 15px; width: min(260px, calc(100% - 44px)); }
-      .media-slip:nth-child(1) { top: 4px; }
-      .media-slip:nth-child(2) { top: 65px; left: 52px; }
-      .media-slip:nth-child(3) { top: 126px; }
+      .transfer-visual { grid-template-columns: repeat(3, 1fr); }
+      .media-slip { padding: 13px 15px; }
       .media-slip i { margin-top: 8px; }
       .input-shell { grid-template-columns: 1fr auto; }
       .url-input { grid-column: 1 / -1; }
@@ -583,8 +574,8 @@
       .result { gap: 18px; margin-top: 20px; padding-top: 20px; }
       .choice { min-height: 66px; }
       .progress-head { align-items: center; }
-      .progress-foot { align-items: flex-end; }
-      .progress-detail { max-width: 75%; }
+      .progress-actions { justify-content: stretch; }
+      .progress-actions button { flex: 1; justify-content: center; }
     }
 
     @media (pointer: coarse) {
@@ -601,14 +592,14 @@
   <main class="shell">
     <header class="topbar">
       <div class="brand"><span class="brand-mark">↓</span> Linkdrop</div>
-      <div class="status-pill"><span class="status-dot"></span> Siap memproses media publik</div>
+      <div class="status-pill"><span class="status-dot"></span> Siap digunakan</div>
     </header>
 
     <section class="hero">
       <div class="hero-copy">
-        <p class="kicker">Ruang transfer media pribadi</p>
-        <h1>Pindahkan media tanpa menebak kualitas.</h1>
-        <p class="lead">Tempel link publik. Linkdrop membaca format sumber dan menyiapkan video, audio, foto, atau carousel sesuai pilihanmu.</p>
+        <p class="kicker">Unduh media dengan lebih jelas</p>
+        <h1>Pilih kualitasnya. Simpan medianya.</h1>
+        <p class="lead">Tempel link dari platform favoritmu, lihat format dan perkiraan ukuran file, lalu unduh video, audio, atau foto yang kamu perlukan.</p>
         <div class="platforms" aria-label="Platform populer">
           <span class="platform">YouTube</span>
           <span class="platform">Instagram</span>
@@ -619,28 +610,28 @@
         </div>
       </div>
       <div class="transfer-visual" aria-hidden="true">
-        <div class="media-slip"><span>Video</span><strong>2160p dengan audio</strong><i style="--meter: 86%"></i></div>
-        <div class="media-slip"><span>Audio</span><strong>Sumber atau MP3</strong><i style="--meter: 62%"></i></div>
-        <div class="media-slip"><span>Foto</span><strong>Resolusi asli</strong><i style="--meter: 74%"></i></div>
+        <div class="media-slip"><span>Video</span><strong>Pilih resolusi hingga 4K</strong><i style="--meter: 86%"></i></div>
+        <div class="media-slip"><span>Audio</span><strong>MP3 hingga 320 kbps</strong><i style="--meter: 68%"></i></div>
+        <div class="media-slip"><span>Foto</span><strong>Simpan file tanpa kompresi ulang</strong><i style="--meter: 76%"></i></div>
       </div>
     </section>
 
     <section class="card">
       <form id="analyzeForm">
-        <label class="input-label" for="urlInput">Link media publik</label>
+        <label class="input-label" for="urlInput">Tempel link media</label>
         <div class="input-shell">
           <input class="url-input" id="urlInput" type="url" inputmode="url" autocomplete="url" placeholder="https://..." required>
           <button class="button button-quiet" id="pasteButton" type="button">Tempel</button>
-          <button class="button button-primary" id="analyzeButton" type="submit">Analisis link</button>
+          <button class="button button-primary" id="analyzeButton" type="submit">Lihat pilihan</button>
         </div>
         <div class="helper">
-          <span>Hanya konten publik yang dapat diproses.</span>
+          <span>Mendukung konten publik dari platform yang kompatibel.</span>
           <span>Batas file server: {{ max_file_mb }} MB</span>
         </div>
       </form>
 
       <div class="notice" id="errorBox" role="alert"></div>
-      <div class="loading" id="loading"><span class="spinner"></span><span>Membaca format dari platform sumber…</span></div>
+      <div class="loading" id="loading"><span class="spinner"></span><span>Mencari kualitas dan format yang tersedia…</span></div>
 
       <div class="result" id="result">
         <div class="thumb-wrap">
@@ -675,9 +666,9 @@
     </section>
 
     <section class="fineprint">
-      <div class="fineprint-item"><strong>Kualitas nyata</strong>Daftar dibuat dari format yang dilaporkan platform, diurutkan dari terendah ke tertinggi.</div>
-      <div class="fineprint-item"><strong>Konversi server</strong>Video dan audio diproses dengan FFmpeg. MP3 320 kbps tidak menambah detail melebihi sumber.</div>
-      <div class="fineprint-item"><strong>Privasi</strong>File diproses sementara dan dihapus setelah respons selesai. Aplikasi tidak menyimpan riwayat link.</div>
+      <div class="fineprint-item"><strong>Pilihan yang transparan</strong>Resolusi, format, dan perkiraan ukuran ditampilkan sebelum unduhan dimulai.</div>
+      <div class="fineprint-item"><strong>Siap diputar</strong>Video yang tidak kompatibel disesuaikan ke H.264/AAC. Kualitas MP3 tetap mengikuti audio sumber.</div>
+      <div class="fineprint-item"><strong>Privat dan sementara</strong>File hanya disimpan selama proses berlangsung, lalu dihapus dari server.</div>
     </section>
 
     <footer>Gunakan hanya untuk konten milik sendiri, berlisensi, atau yang Anda punya izin untuk mengunduh. Patuhi hak cipta dan ketentuan platform.</footer>
@@ -1052,7 +1043,7 @@
       result.style.display = "none";
       loading.style.display = "flex";
       analyzeButton.disabled = true;
-      analyzeButton.textContent = "Menganalisis…";
+      analyzeButton.textContent = "Memeriksa…";
 
       try {
         const response = await fetch("/api/info", {
@@ -1068,7 +1059,7 @@
       } finally {
         loading.style.display = "none";
         analyzeButton.disabled = false;
-        analyzeButton.textContent = "Analisis link";
+        analyzeButton.textContent = "Lihat pilihan";
       }
     }
 

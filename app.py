@@ -444,9 +444,12 @@ def _is_image(entry: dict) -> bool:
     return has_image and not has_video
 
 
-def _format_size(fmt: dict) -> int | None:
+def _format_size(fmt: dict, duration: float | None = None) -> int | None:
     value = fmt.get("filesize") or fmt.get("filesize_approx")
-    return int(value) if value else None
+    if value:
+        return int(value)
+    bitrate = fmt.get("tbr") or fmt.get("abr")
+    return int(float(bitrate) * 1000 * duration / 8) if bitrate and duration else None
 
 
 def _pretty_bytes(value: int | None) -> str | None:
@@ -461,7 +464,7 @@ def _pretty_bytes(value: int | None) -> str | None:
     return None
 
 
-def _estimated_video_size(formats: list[dict], height: int) -> int | None:
+def _estimated_video_size(formats: list[dict], height: int, duration: float | None = None) -> int | None:
     video = [
         fmt for fmt in formats
         if fmt.get("vcodec") not in (None, "none") and (fmt.get("height") or 0) <= height
@@ -483,8 +486,23 @@ def _estimated_video_size(formats: list[dict], height: int) -> int | None:
         key=lambda fmt: (fmt.get("ext") == "m4a", fmt.get("abr") or fmt.get("tbr") or 0),
         default=None,
     )
-    sizes = [_format_size(item) for item in (best_video, best_audio) if item]
-    return sum(size for size in sizes if size) or None
+    video_size = _format_size(best_video, duration) if best_video else None
+    if not video_size:
+        return None
+    if best_video.get("acodec") not in (None, "none"):
+        return video_size
+    return video_size + (_format_size(best_audio, duration) or 0)
+
+
+def _best_audio_format(formats: list[dict]) -> dict | None:
+    return max(
+        (
+            fmt for fmt in formats
+            if fmt.get("vcodec") == "none" and fmt.get("acodec") not in (None, "none")
+        ),
+        key=lambda fmt: fmt.get("abr") or fmt.get("tbr") or 0,
+        default=None,
+    )
 
 
 def _video_format_selector(height: int) -> str:
@@ -544,16 +562,30 @@ def _build_choices(url: str, info: dict) -> dict:
 
     video_choices = []
     for height in heights:
-        size = _pretty_bytes(_estimated_video_size(formats, height))
-        detail = f"MP4 · hingga {height}p" + (f" · ~{size}" if size else "")
+        size = _pretty_bytes(_estimated_video_size(formats, height, info.get("duration")))
+        detail = "MP4" + (f" · sekitar {size}" if size else " · ukuran dihitung saat mengunduh")
         video_choices.append(_choice(url, "video", f"{height}p", detail, height=height))
 
+    source_audio = _best_audio_format(formats)
+    source_bitrate = round(source_audio.get("abr") or source_audio.get("tbr") or 0) if source_audio else 0
+    source_size = _pretty_bytes(_format_size(source_audio, info.get("duration"))) if source_audio else None
+    source_codec = str(source_audio.get("acodec") or "").lower() if source_audio else ""
+    source_format = "AAC / M4A" if source_codec.startswith(("aac", "mp4a")) else "Opus / WebM"
+    source_label = "Audio sumber" + (f" · {source_bitrate} kbps" if source_bitrate else "")
+    source_detail = f"{source_format} · tanpa konversi"
+    if source_size:
+        source_detail += f" · sekitar {source_size}"
+
+    def mp3_detail(bitrate: int) -> str:
+        size = _pretty_bytes(int(bitrate * 1000 * info["duration"] / 8)) if info.get("duration") else None
+        return f"MP3 · {bitrate} kbps" + (f" · sekitar {size}" if size else "")
+
     audio_choices = [
-        _choice(url, "audio", "Audio asli", "Kualitas sumber · M4A/WebM", codec="source"),
-        _choice(url, "audio", "MP3 128 kbps", "Ukuran lebih kecil", codec="mp3", bitrate=128),
-        _choice(url, "audio", "MP3 192 kbps", "Seimbang", codec="mp3", bitrate=192),
-        _choice(url, "audio", "MP3 320 kbps", "Bitrate output tertinggi", codec="mp3", bitrate=320),
-    ] if formats else []
+        _choice(url, "audio", source_label, source_detail, codec="source"),
+        _choice(url, "audio", "MP3 128 kbps", mp3_detail(128), codec="mp3", bitrate=128),
+        _choice(url, "audio", "MP3 192 kbps", mp3_detail(192), codec="mp3", bitrate=192),
+        _choice(url, "audio", "MP3 320 kbps", mp3_detail(320), codec="mp3", bitrate=320),
+    ] if source_audio else []
 
     return {"video": video_choices, "audio": audio_choices, "photo": []}
 
@@ -760,7 +792,7 @@ def _download_video_or_audio(
         })
     elif kind == "audio":
         codec = payload.get("codec")
-        options["format"] = "bestaudio[ext=m4a]/bestaudio/best"
+        options["format"] = "bestaudio/best"
         if codec == "mp3":
             bitrate = int(payload.get("bitrate", 0))
             if bitrate not in {128, 192, 320}:

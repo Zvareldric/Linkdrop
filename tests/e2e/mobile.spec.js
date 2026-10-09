@@ -39,8 +39,8 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("halaman tetap utuh pada viewport ponsel", async ({ page }) => {
-  await expect(page.getByRole("heading", { name: "Pindahkan media tanpa menebak kualitas." })).toBeVisible();
-  await expect(page.getByLabel("Link media publik")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Pilih kualitasnya. Simpan medianya." })).toBeVisible();
+  await expect(page.getByLabel("Tempel link media")).toBeVisible();
 
   const viewportFits = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
   expect(viewportFits).toBe(true);
@@ -73,14 +73,18 @@ test("alur analisis berakhir pada tombol simpan yang dapat mengunduh file", asyn
     body: responseBody
   }));
 
-  await page.getByLabel("Link media publik").fill("https://example.com/video");
-  await page.getByRole("button", { name: "Analisis link" }).click();
+  await page.getByLabel("Tempel link media").fill("https://example.com/video");
+  await page.getByRole("button", { name: "Lihat pilihan" }).click();
   await expect(page.getByText("Contoh media untuk pengujian")).toBeVisible();
 
   await page.getByRole("link", { name: /720p/ }).click();
 
   await expect(page.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "100");
   await expect(page.getByText("File siap disimpan", { exact: true })).toBeVisible();
+
+  const trackBox = await page.locator(".progress-track").boundingBox();
+  const saveBox = await page.getByRole("button", { name: "Simpan ke perangkat", exact: true }).boundingBox();
+  expect(saveBox.y).toBeGreaterThan(trackBox.y + trackBox.height + 16);
 
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Simpan ke perangkat", exact: true }).click();
