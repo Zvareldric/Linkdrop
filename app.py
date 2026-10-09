@@ -173,8 +173,11 @@ def _register_instagram_image_support() -> None:
 _register_instagram_image_support()
 
 
-def _twitter_photo_result(extractor, status: dict, tweet_id: str) -> dict | None:
+def _twitter_photo_result(extractor, status: dict | None, tweet_id: str) -> dict | None:
     """Build an image result for photo-only X/Twitter posts."""
+
+    if not isinstance(status, dict):
+        return None
 
     description = status.get("full_text") or status.get("text") or ""
     user = status.get("user") or {}
@@ -427,7 +430,10 @@ def _extract_info(url: str) -> dict:
     with _authentication_options() as auth:
         options = {**_base_ydl_options(), **auth, "skip_download": True}
         with yt_dlp.YoutubeDL(options) as ydl:
-            return ydl.extract_info(url, download=False)
+            info = ydl.extract_info(url, download=False)
+    if not isinstance(info, dict):
+        raise UserFacingError("Media publik pada link ini tidak dapat dibaca oleh platform sumber.")
+    return info
 
 
 def _entries(info: dict) -> list[dict]:
@@ -442,13 +448,15 @@ def _is_image(entry: dict) -> bool:
     if str(entry.get("ext", "")).lower() in image_extensions:
         return True
 
-    formats = entry.get("formats") or []
+    formats = [fmt for fmt in entry.get("formats") or [] if isinstance(fmt, dict)]
     has_video = any(fmt.get("vcodec") not in (None, "none") for fmt in formats)
     has_image = any(str(fmt.get("ext", "")).lower() in image_extensions for fmt in formats)
     return has_image and not has_video
 
 
-def _format_size(fmt: dict, duration: float | None = None) -> int | None:
+def _format_size(fmt: dict | None, duration: float | None = None) -> int | None:
+    if not isinstance(fmt, dict):
+        return None
     value = fmt.get("filesize") or fmt.get("filesize_approx")
     if value:
         return int(value)
@@ -469,6 +477,7 @@ def _pretty_bytes(value: int | None) -> str | None:
 
 
 def _estimated_video_size(formats: list[dict], height: int, duration: float | None = None) -> int | None:
+    formats = [fmt for fmt in formats if isinstance(fmt, dict)]
     video = [
         fmt for fmt in formats
         if fmt.get("vcodec") not in (None, "none") and (fmt.get("height") or 0) <= height
@@ -495,14 +504,14 @@ def _estimated_video_size(formats: list[dict], height: int, duration: float | No
         return None
     if best_video.get("acodec") not in (None, "none"):
         return video_size
-    return video_size + (_format_size(best_audio, duration) or 0)
+    return video_size + (_format_size(best_audio, duration) or 0) if best_audio else video_size
 
 
 def _best_audio_format(formats: list[dict]) -> dict | None:
     return max(
         (
             fmt for fmt in formats
-            if fmt.get("vcodec") == "none" and fmt.get("acodec") not in (None, "none")
+            if isinstance(fmt, dict) and fmt.get("vcodec") == "none" and fmt.get("acodec") not in (None, "none")
         ),
         key=lambda fmt: fmt.get("abr") or fmt.get("tbr") or 0,
         default=None,
@@ -559,7 +568,7 @@ def _build_choices(url: str, info: dict) -> dict:
             "photo": [_choice(url, "gallery", "Unduh media asli", detail)],
         }
 
-    formats = info.get("formats") or []
+    formats = [fmt for fmt in info.get("formats") or [] if isinstance(fmt, dict)]
     heights = sorted({
         int(fmt["height"])
         for fmt in formats
@@ -875,6 +884,8 @@ def _best_image_source(entry: dict) -> tuple[str, dict, str] | None:
     image_extensions = {"jpg", "jpeg", "png", "webp", "avif"}
     candidates = []
     for fmt in entry.get("formats") or []:
+        if not isinstance(fmt, dict):
+            continue
         if str(fmt.get("ext", "")).lower() in image_extensions and fmt.get("url"):
             candidates.append(fmt)
 
@@ -885,7 +896,7 @@ def _best_image_source(entry: dict) -> tuple[str, dict, str] | None:
     if str(entry.get("ext", "")).lower() in image_extensions and entry.get("url"):
         return entry["url"], entry.get("http_headers") or {}, entry.get("ext") or "jpg"
 
-    thumbnails = [item for item in entry.get("thumbnails") or [] if item.get("url")]
+    thumbnails = [item for item in entry.get("thumbnails") or [] if isinstance(item, dict) and item.get("url")]
     if thumbnails:
         selected = max(thumbnails, key=lambda item: (item.get("width") or 0) * (item.get("height") or 0))
         extension = Path(urlparse(selected["url"]).path).suffix.lstrip(".").lower()
@@ -896,14 +907,14 @@ def _best_image_source(entry: dict) -> tuple[str, dict, str] | None:
 def _best_progressive_video_source(entry: dict) -> tuple[str, dict, str] | None:
     formats = [
         fmt for fmt in entry.get("formats") or []
-        if fmt.get("url") and fmt.get("vcodec") not in (None, "none") and fmt.get("acodec") not in (None, "none")
+        if isinstance(fmt, dict) and fmt.get("url") and fmt.get("vcodec") not in (None, "none") and fmt.get("acodec") not in (None, "none")
     ]
     if not formats:
         # Instagram's progressive video_versions are playable MP4 files, but
         # older extractor metadata may omit acodec entirely.
         formats = [
             fmt for fmt in entry.get("formats") or []
-            if fmt.get("url")
+            if isinstance(fmt, dict) and fmt.get("url")
             and fmt.get("vcodec") not in (None, "none")
             and fmt.get("protocol") not in {"m3u8", "m3u8_native", "http_dash_segments"}
         ]

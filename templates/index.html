@@ -1558,8 +1558,11 @@
       );
       if (selected.length > batchWarningItems) messages.push(`${selected.length} media akan diproses secara bertahap.`);
       if (largestPackageRatio >= .6) messages.push(`Paket terbesar memakai sekitar ${Math.round(largestPackageRatio * 100)}% batas penyimpanan aman.`);
-      if (currentBatchPackages.length > 1) messages.push(`Pilihan dibagi menjadi ${currentBatchPackages.length} paket ZIP agar tetap di bawah batas penyimpanan.`);
-      if (unknown) messages.push(`${unknown} media belum melaporkan ukuran; batas aktual tetap diperiksa saat mengunduh.`);
+      if (currentBatchPackages.length > 1) {
+        const totalLabel = `${prettyBytes(estimatedBytes)}${unknown ? ` + ${unknown} ukuran belum diketahui` : ""}`;
+        messages.push(`Unduhan dibagi menjadi ${currentBatchPackages.length} paket ZIP agar tiap paket tetap aman (maks. ${prettyBytes(batchTargetBytes)}). Total: ${totalLabel}.`);
+      }
+      if (unknown && currentBatchPackages.length <= 1) messages.push(`${unknown} media belum melaporkan ukuran; batas aktual tetap diperiksa saat mengunduh.`);
       if (failed) messages.push(`${failed} link gagal dianalisis dan tidak akan menghentikan media lainnya.`);
       if (oversizedPackage) messages.push("Ada paket yang melewati batas aman. Kurangi kualitas atau pilihan media.");
       showBatchMessage(messages.join(" "), oversizedPackage);

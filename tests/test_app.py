@@ -168,6 +168,16 @@ class AppTests(unittest.TestCase):
         self.assertEqual(result["entries"][0]["_linkdrop_media_type"], "image")
         self.assertIn("name=orig", result["entries"][0]["formats"][0]["url"])
 
+    def test_twitter_photo_fallback_ignores_missing_status(self):
+        self.assertIsNone(media_app._twitter_photo_result(None, None, "tweet-1"))
+
+    @patch("app.yt_dlp.YoutubeDL")
+    def test_extract_info_rejects_empty_extractor_result(self, youtube_dl):
+        youtube_dl.return_value.__enter__.return_value.extract_info.return_value = None
+
+        with self.assertRaisesRegex(media_app.UserFacingError, "tidak dapat dibaca"):
+            media_app._extract_info("https://x.com/example/status/1")
+
     def test_homepage_renders(self):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
@@ -220,6 +230,34 @@ class AppTests(unittest.TestCase):
         ]
 
         self.assertIsNone(media_app._estimated_video_size(formats, 720))
+
+    def test_video_size_uses_video_only_when_source_has_no_audio_stream(self):
+        formats = [{
+            "height": 720,
+            "ext": "mp4",
+            "vcodec": "avc1",
+            "acodec": "none",
+            "filesize": 4_000_000,
+        }]
+
+        self.assertEqual(media_app._estimated_video_size(formats, 720), 4_000_000)
+
+    def test_video_choices_ignore_missing_audio_and_empty_format_metadata(self):
+        choices = media_app._build_choices("https://example.com/media", {
+            "formats": [
+                None,
+                {
+                    "height": 720,
+                    "ext": "mp4",
+                    "vcodec": "h264",
+                    "acodec": "none",
+                    "filesize": 4_000_000,
+                },
+            ],
+        })
+
+        self.assertEqual([choice["label"] for choice in choices["video"]], ["720p"])
+        self.assertEqual(choices["audio"], [])
 
     def test_best_audio_prefers_highest_source_bitrate(self):
         selected = media_app._best_audio_format([

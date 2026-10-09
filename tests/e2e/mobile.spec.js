@@ -167,6 +167,34 @@ test("kontrol mode, clipboard, format, dan pilihan batch memperbarui antarmuka",
   await expect(page.getByLabel("Tempel link media")).toBeVisible();
 });
 
+test("pembagian paket menjelaskan batas penyimpanan kepada pengguna", async ({ page }) => {
+  const largeMediaPayload = {
+    ...mediaPayload,
+    choices: {
+      video: [{
+        ...mediaPayload.choices.video[0],
+        estimated_bytes: 1024 * 1024 * 1024
+      }],
+      audio: [],
+      photo: []
+    }
+  };
+  await page.route("**/api/info", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(largeMediaPayload)
+  }));
+
+  await page.getByRole("tab", { name: "Beberapa link" }).click();
+  await page.getByLabel("Tempel beberapa link").fill("https://example.com/one\nhttps://example.com/two");
+  await page.getByRole("button", { name: "Analisis semua" }).click();
+
+  await expect(page.getByRole("status")).toContainText("Unduhan dibagi menjadi 2 paket ZIP");
+  await expect(page.getByRole("status")).toContainText("agar tiap paket tetap aman");
+  await expect(page.getByRole("button", { name: "Unduh paket 1" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Unduh paket 2" })).toBeVisible();
+});
+
 test("tombol batalkan menghentikan unduhan yang masih berjalan", async ({ page }) => {
   await page.route("**/api/info", route => route.fulfill({
     status: 200,
