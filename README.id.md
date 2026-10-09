@@ -11,6 +11,10 @@ Linkdrop adalah aplikasi web responsif untuk menganalisis dan mengunduh media pu
 
 > Gunakan Linkdrop hanya untuk media milik sendiri, domain publik, atau media yang telah Anda peroleh izinnya. Linkdrop tidak menembus DRM, akses privat, CAPTCHA, maupun pembatasan platform.
 
+## Untuk siapa?
+
+Linkdrop dibuat untuk penggunaan pribadi: editor yang mengelola materi berizin, penggemar K-pop yang menyimpan konten publik sesuai izin pemiliknya, kreator, dan pengguna lain yang membutuhkan salinan media publik untuk koleksi atau pekerjaan pribadi. Ini bukan layanan unduh publik atau alat untuk mendistribusikan ulang karya orang lain.
+
 ## Fitur utama
 
 - Menampilkan resolusi sumber dari terendah hingga tertinggi, termasuk 1440p dan 2160p jika tersedia.
@@ -76,7 +80,7 @@ Quick start native ini untuk macOS dan Linux. Untuk Windows Docker Desktop, pake
 
 ## Akses privat dari ponsel
 
-Untuk penggunaan pribadi, setup yang disarankan adalah menjalankan Linkdrop di komputer lalu membukanya hanya melalui jaringan privat [Tailscale](https://tailscale.com/). Anda tidak perlu melakukan deployment publik dan aplikasi tetap dapat diakses dari data seluler maupun Wi-Fi lain.
+Untuk penggunaan pribadi, setup yang disarankan adalah menjalankan Linkdrop di komputer lalu membukanya hanya melalui jaringan privat [Tailscale](https://tailscale.com/). Paket Personal Tailscale tersedia gratis untuk penggunaan non-komersial; periksa [ketentuan paketnya](https://tailscale.com/pricing) sebelum digunakan. Anda tidak perlu melakukan deployment publik dan aplikasi tetap dapat diakses dari data seluler maupun Wi-Fi lain.
 
 Jalankan Linkdrop pada port `5050`:
 
@@ -95,6 +99,10 @@ tailscale serve status
 Pasang Tailscale di ponsel, masuk ke tailnet yang sama, lalu buka alamat HTTPS yang ditampilkan oleh `tailscale serve`. Komputer harus tetap menyala, tidak dalam kondisi sleep, tersambung ke Tailscale, dan menjalankan Linkdrop.
 
 Baca [Panduan Akses Privat Tailscale](docs/TAILSCALE.id.md) untuk instalasi, keamanan, cara menghentikan layanan, dan troubleshooting.
+
+### Jika komputer harus selalu aktif
+
+Gunakan VPS atau host container persisten bila Linkdrop perlu tersedia saat komputer pribadi mati. Opsi ini memerlukan biaya dari penyedia VPS dan konfigurasi keamanan tambahan; tetap batasi akses dengan Tailscale atau proxy HTTPS, jangan membuka aplikasi tanpa rate limiting. Lihat [Panduan Deployment](docs/DEPLOYMENT.md).
 
 ## Konfigurasi
 

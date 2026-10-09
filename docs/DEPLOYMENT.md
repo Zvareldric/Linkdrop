@@ -2,7 +2,7 @@
 
 Linkdrop performs CPU-intensive media processing and can transfer large files. A persistent VM or container host is the recommended production target.
 
-For a single user, a public deployment is usually unnecessary. Run Linkdrop on a trusted computer and use [Tailscale Serve](TAILSCALE.md) for private HTTPS access from your own devices.
+For personal use, a public deployment is usually unnecessary. Run Linkdrop on a trusted computer and use [Tailscale Serve](TAILSCALE.md) for private HTTPS access from your own devices; Tailscale's Personal plan can be used without a hosting bill for eligible non-commercial personal use. Use a VPS only when Linkdrop must remain online while the personal computer is off. A VPS adds provider cost and requires the production controls below.
 
 ## Recommended capacity
 

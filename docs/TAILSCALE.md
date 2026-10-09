@@ -6,6 +6,8 @@ Tailscale Serve is the recommended way to use Linkdrop privately from a phone, t
 
 This setup is intended for personal use. It is not a public deployment, does not copy Linkdrop to a cloud server, and does not keep the application online when the host computer is off or asleep.
 
+At the time this guide was updated, Tailscale's Personal plan is available at no cost for non-commercial personal use. Review the current [Tailscale plan terms](https://tailscale.com/pricing), because service limits can change.
+
 ## What you need
 
 - Linkdrop installed and working locally
@@ -79,6 +81,10 @@ Open that HTTPS address on any device connected to the same tailnet.
 6. In the save dialog, keep the default filename or edit it; Linkdrop retains the original extension. Select **Simpan sekarang**. On mobile browsers, choose **Save to Files** or the equivalent action from the share sheet.
 
 The phone does not need to use the same Wi-Fi as the host. Mobile data works as long as both devices are connected to the same tailnet.
+
+## When an always-on server is needed
+
+Use a VPS or persistent container host if the personal computer cannot stay powered on. A VPS has provider costs and must be operated like a server: use a unique `DOWNLOAD_TOKEN_SECRET`, enough temporary disk, HTTPS, rate limiting, and system updates. Tailscale can still run on the VPS to keep access private instead of exposing Linkdrop to the public internet. Read the [Deployment Guide](DEPLOYMENT.md) before choosing this option.
 
 ## Daily operation
 

@@ -6,6 +6,8 @@ Tailscale Serve adalah cara yang disarankan untuk memakai Linkdrop secara pribad
 
 Setup ini ditujukan untuk penggunaan pribadi. Linkdrop tidak dipindahkan ke cloud, tidak menjadi layanan publik, dan tidak dapat diakses ketika komputer host mati atau sleep.
 
+Untuk penggunaan pribadi non-komersial, paket Personal Tailscale tersedia gratis pada saat dokumentasi ini diperbarui. Periksa kembali [paket dan ketentuan Tailscale](https://tailscale.com/pricing), karena batas layanan dapat berubah.
+
 ## Kebutuhan
 
 - Linkdrop sudah terpasang dan dapat berjalan secara lokal
@@ -79,6 +81,10 @@ Buka alamat HTTPS tersebut dari perangkat yang tersambung ke tailnet yang sama.
 6. Pada dialog simpan, gunakan nama default atau ubah namanya; Linkdrop tetap mempertahankan ekstensi asli. Tekan **Simpan sekarang**. Pada browser ponsel, pilih **Simpan ke File** atau tindakan sejenis melalui menu bagikan.
 
 Ponsel tidak harus berada pada Wi-Fi yang sama dengan komputer host. Data seluler dapat digunakan selama kedua perangkat terhubung ke tailnet yang sama.
+
+## Jika membutuhkan server yang selalu aktif
+
+Gunakan VPS atau host container persisten bila komputer pribadi tidak dapat dibiarkan menyala. VPS berbiaya dan harus dikelola seperti server: gunakan `DOWNLOAD_TOKEN_SECRET` yang unik, ruang disk sementara yang cukup, HTTPS, rate limiting, serta pembaruan sistem. Tailscale tetap dapat dipakai pada VPS untuk membatasi akses pribadi tanpa membuka Linkdrop ke internet publik. Baca [Panduan Deployment](DEPLOYMENT.md) sebelum memilih opsi ini.
 
 ## Penggunaan harian
 

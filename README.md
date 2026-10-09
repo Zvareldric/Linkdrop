@@ -11,6 +11,10 @@ Linkdrop is a responsive web application for inspecting and downloading public m
 
 > Use Linkdrop only for media you own, media in the public domain, or media you have permission to download. Linkdrop does not bypass DRM, private access, CAPTCHA, or platform restrictions.
 
+## Who is it for?
+
+Linkdrop is for personal use: editors working with licensed material, K-pop fans saving public media with the creator's permission, creators, and other users who need copies of public media for a personal collection or workflow. It is not a public download service or a tool for redistributing someone else's work.
+
 ## Highlights
 
 - Lists real source resolutions from lowest to highest, including 1440p and 2160p when available.
@@ -76,7 +80,7 @@ This native quick start is for macOS and Linux. For Windows Docker Desktop, plat
 
 ## Private access from a phone
 
-For personal use, the recommended setup is to keep Linkdrop on your computer and publish it only inside your private [Tailscale](https://tailscale.com/) network. This avoids a public deployment and works from mobile data or another Wi-Fi network.
+For personal use, the recommended setup is to keep Linkdrop on your computer and publish it only inside your private [Tailscale](https://tailscale.com/) network. Tailscale's Personal plan is available at no cost for non-commercial use; review its [plan terms](https://tailscale.com/pricing) before relying on it. This avoids a public deployment and works from mobile data or another Wi-Fi network.
 
 Start Linkdrop on port `5050`:
 
@@ -95,6 +99,10 @@ tailscale serve status
 Install Tailscale on the phone, sign in to the same tailnet, and open the HTTPS address printed by `tailscale serve`. The computer must remain powered on, awake, connected to Tailscale, and running Linkdrop.
 
 See the complete [Private Tailscale Access Guide](docs/TAILSCALE.md) for installation, security notes, shutdown commands, and troubleshooting.
+
+### When the host must stay online
+
+Use a VPS or persistent container host when Linkdrop must remain available while the personal computer is off. A VPS has provider costs and needs additional hardening; keep access behind Tailscale or an HTTPS proxy and do not expose the application without rate limiting. See the [Deployment Guide](docs/DEPLOYMENT.md).
 
 ## Configuration
 
