@@ -1,0 +1,17 @@
+{
+  "name": "Linkdrop Media Downloader",
+  "short_name": "Linkdrop",
+  "description": "Analisis dan unduh media publik dalam kualitas sumber yang tersedia.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#e9eef5",
+  "theme_color": "#3157d5",
+  "icons": [
+    {
+      "src": "/static/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

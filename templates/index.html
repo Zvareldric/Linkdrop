@@ -1,0 +1,976 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Unduh media publik dari YouTube, Instagram, TikTok, X, dan platform lain.">
+  <meta name="theme-color" content="#3157d5">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <title>Linkdrop — Media Downloader</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172033;
+      --muted: #626b7d;
+      --canvas: #e9eef5;
+      --panel: #fbfcfe;
+      --panel-strong: #ffffff;
+      --line: #cbd4e0;
+      --accent: #ff5c3b;
+      --accent-ink: #ffffff;
+      --signal: #3157d5;
+      --signal-soft: #dfe7ff;
+      --danger: #b92f2f;
+      --radius: 20px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      font-family: "Avenir Next", Avenir, "Segoe UI", ui-sans-serif, sans-serif;
+      background:
+        linear-gradient(rgba(49, 87, 213, .055) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(49, 87, 213, .055) 1px, transparent 1px),
+        var(--canvas);
+      background-size: 28px 28px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button, input, a { font: inherit; }
+    button, a { -webkit-tap-highlight-color: transparent; }
+
+    :focus-visible {
+      outline: 3px solid rgba(49, 87, 213, .42);
+      outline-offset: 3px;
+    }
+
+    .shell {
+      width: min(1080px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: max(28px, env(safe-area-inset-top)) 0 max(60px, env(safe-area-inset-bottom));
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 58px;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 750;
+      letter-spacing: -.03em;
+    }
+
+    .brand-mark {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      color: white;
+      background: var(--signal);
+      border-radius: 10px 10px 10px 3px;
+      font-size: 18px;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 11px;
+      color: #445069;
+      background: rgba(255, 255, 255, .68);
+      border: 1px solid #bdc7d6;
+      border-radius: 999px;
+      font-size: 12px;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      background: #28a968;
+      border-radius: 50%;
+      box-shadow: 0 0 0 3px rgba(40, 169, 104, .13);
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(260px, .75fr);
+      align-items: center;
+      gap: clamp(36px, 7vw, 86px);
+      margin-bottom: 40px;
+    }
+
+    .hero-copy { max-width: 720px; }
+
+    .kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      margin: 0 0 16px;
+      color: var(--signal);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .kicker::before {
+      content: "";
+      width: 24px;
+      height: 3px;
+      background: var(--accent);
+      border-radius: 999px;
+    }
+
+    h1 {
+      max-width: 720px;
+      margin: 0;
+      font-size: clamp(46px, 7vw, 76px);
+      font-weight: 720;
+      line-height: .99;
+      letter-spacing: -.055em;
+    }
+
+    .lead {
+      max-width: 610px;
+      margin: 22px 0 0;
+      color: var(--muted);
+      font-size: clamp(16px, 2vw, 18px);
+      line-height: 1.6;
+    }
+
+    .platforms {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 24px;
+    }
+
+    .platform {
+      padding: 7px 11px;
+      color: #46516a;
+      background: rgba(255, 255, 255, .58);
+      border: 1px solid #c7d0dd;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .transfer-visual {
+      position: relative;
+      min-height: 290px;
+      border-left: 2px solid var(--signal);
+    }
+
+    .transfer-visual::before,
+    .transfer-visual::after {
+      content: "";
+      position: absolute;
+      left: -6px;
+      width: 10px;
+      height: 10px;
+      background: var(--accent);
+      border: 3px solid var(--canvas);
+      border-radius: 50%;
+    }
+
+    .transfer-visual::before { top: 15px; }
+    .transfer-visual::after { bottom: 15px; }
+
+    .media-slip {
+      position: absolute;
+      left: 28px;
+      width: min(240px, calc(100% - 28px));
+      padding: 18px;
+      color: var(--ink);
+      background: var(--panel-strong);
+      border: 1px solid #bbc6d5;
+      border-radius: 4px 18px 18px 18px;
+      box-shadow: 10px 12px 0 rgba(49, 87, 213, .11);
+    }
+
+    .media-slip:nth-child(1) { top: 12px; transform: rotate(-2deg); }
+    .media-slip:nth-child(2) { top: 103px; left: 56px; transform: rotate(2deg); }
+    .media-slip:nth-child(3) { top: 194px; left: 37px; transform: rotate(-1deg); }
+    .media-slip span { color: var(--signal); font-size: 11px; font-weight: 750; }
+    .media-slip strong { display: block; margin-top: 5px; font-size: 16px; }
+    .media-slip i {
+      display: block;
+      width: var(--meter, 76%);
+      height: 5px;
+      margin-top: 12px;
+      background: var(--accent);
+      border-radius: 999px;
+    }
+
+    .card {
+      padding: clamp(18px, 4vw, 30px);
+      background: var(--panel);
+      border: 1px solid #c2ccda;
+      border-radius: var(--radius);
+      box-shadow: 0 24px 60px rgba(42, 62, 105, .14);
+    }
+
+    .input-label {
+      display: block;
+      margin: 0 0 10px 2px;
+      color: #303b52;
+      font-size: 13px;
+      font-weight: 750;
+    }
+
+    .input-shell {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 10px;
+      padding: 8px;
+      background: white;
+      border: 1px solid #b9c4d3;
+      border-radius: 16px;
+      transition: border-color .2s, box-shadow .2s;
+    }
+
+    .input-shell:focus-within {
+      border-color: var(--signal);
+      box-shadow: 0 0 0 4px rgba(49, 87, 213, .1);
+    }
+
+    .url-input {
+      min-width: 0;
+      padding: 13px 12px;
+      color: var(--ink);
+      background: transparent;
+      border: 0;
+      outline: 0;
+      font-size: 16px;
+    }
+
+    .url-input::placeholder { color: #929bab; }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 46px;
+      padding: 0 17px;
+      border: 0;
+      border-radius: 11px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: transform .15s, opacity .15s, background .15s;
+    }
+
+    .button:hover { transform: translateY(-1px); }
+    .button:disabled { cursor: wait; opacity: .55; transform: none; }
+    .button-primary { color: var(--accent-ink); background: var(--signal); font-weight: 750; }
+    .button-primary:hover { background: #264ac2; }
+    .button-quiet { color: #46516a; background: #edf1f6; }
+    .button-quiet:hover { color: var(--ink); background: #e3e9f1; }
+
+    .helper {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      margin: 12px 2px 0;
+      color: #717b8d;
+      font-size: 12px;
+    }
+
+    .notice {
+      display: none;
+      margin-top: 18px;
+      padding: 13px 15px;
+      color: #8d2323;
+      background: #fff0ee;
+      border: 1px solid #f2b7b0;
+      border-radius: 12px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .loading {
+      display: none;
+      align-items: center;
+      gap: 12px;
+      margin-top: 22px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid #cad2df;
+      border-top-color: var(--signal);
+      border-radius: 50%;
+      animation: spin .75s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .result {
+      display: none;
+      grid-template-columns: 250px 1fr;
+      gap: 26px;
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid #d5dce6;
+    }
+
+    .thumb-wrap {
+      position: relative;
+      overflow: hidden;
+      aspect-ratio: 16 / 10;
+      background: #dfe5ed;
+      border-radius: 15px;
+    }
+
+    .thumb {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .source {
+      position: absolute;
+      left: 10px;
+      bottom: 10px;
+      padding: 6px 8px;
+      color: white;
+      background: rgba(23, 32, 51, .82);
+      border-radius: 7px;
+      font-size: 11px;
+      font-weight: 800;
+      backdrop-filter: blur(8px);
+    }
+
+    .media-title {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1.3;
+      letter-spacing: -.025em;
+    }
+
+    .media-meta {
+      margin: 8px 0 18px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 6px;
+      padding: 4px;
+      background: #e7ecf3;
+      border-radius: 12px;
+    }
+
+    .tab {
+      flex: 1;
+      padding: 9px 12px;
+      color: var(--muted);
+      background: transparent;
+      border: 0;
+      border-radius: 9px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .tab.active { color: white; background: var(--signal); }
+    .tab:disabled { display: none; }
+
+    .choices {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 9px;
+      margin-top: 13px;
+    }
+
+    .choice {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 68px;
+      padding: 12px 13px;
+      color: var(--ink);
+      background: white;
+      border: 1px solid #c5cfdb;
+      border-radius: 12px;
+      text-decoration: none;
+      transition: border-color .15s, transform .15s, background .15s;
+    }
+
+    .choice:hover {
+      background: #f6f8ff;
+      border-color: var(--signal);
+      transform: translateY(-1px);
+    }
+
+    .choice strong { display: block; font-size: 13px; }
+    .choice small { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
+    .choice-arrow { color: var(--signal); font-size: 19px; }
+
+    .download-progress {
+      display: none;
+      margin-top: 14px;
+      padding: 15px;
+      background: #eef2f8;
+      border: 1px solid #c5cfdb;
+      border-radius: 13px;
+    }
+
+    .download-progress.visible { display: block; }
+
+    .progress-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .progress-stage { color: var(--ink); font-size: 12px; font-weight: 800; }
+    .progress-percent { color: var(--signal); font-size: 18px; font-weight: 800; }
+
+    .progress-track {
+      overflow: hidden;
+      height: 8px;
+      margin-top: 11px;
+      background: #d4dbe5;
+      border-radius: 999px;
+    }
+
+    .progress-bar {
+      width: 0;
+      height: 100%;
+      background: linear-gradient(90deg, var(--signal), #6788ff);
+      border-radius: inherit;
+      box-shadow: 0 0 18px rgba(49, 87, 213, .2);
+      transition: width .25s ease;
+    }
+
+    .progress-detail {
+      min-height: 17px;
+      margin: 9px 0 0;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .progress-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .progress-cancel {
+      display: none;
+      flex: 0 0 auto;
+      min-height: 36px;
+      padding: 0 12px;
+      color: #8d2323;
+      background: transparent;
+      border: 1px solid #dfaaa5;
+      border-radius: 9px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 750;
+    }
+
+    .progress-cancel.visible { display: inline-flex; align-items: center; }
+
+    .download-progress.error .progress-percent,
+    .download-progress.error .progress-stage { color: var(--danger); }
+    .download-progress.error .progress-bar { background: var(--danger); box-shadow: none; }
+
+    .result.is-downloading .choice,
+    .result.is-downloading .tab {
+      cursor: wait;
+      opacity: .5;
+      pointer-events: none;
+    }
+
+    .fineprint {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .fineprint-item {
+      padding: 16px;
+      color: var(--muted);
+      border-left: 3px solid #b9c5d7;
+      padding: 4px 0 4px 14px;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .fineprint-item strong { display: block; margin-bottom: 5px; color: #34405a; }
+
+    footer {
+      margin-top: 24px;
+      color: #737d8e;
+      font-size: 11px;
+      line-height: 1.6;
+      text-align: center;
+    }
+
+    @media (max-width: 720px) {
+      .topbar { margin-bottom: 42px; }
+      .status-pill { display: none; }
+      .hero { grid-template-columns: 1fr; gap: 28px; }
+      .transfer-visual { min-height: 190px; margin-left: 8px; }
+      .media-slip { padding: 13px 15px; width: min(260px, calc(100% - 44px)); }
+      .media-slip:nth-child(1) { top: 4px; }
+      .media-slip:nth-child(2) { top: 65px; left: 52px; }
+      .media-slip:nth-child(3) { top: 126px; }
+      .media-slip i { margin-top: 8px; }
+      .input-shell { grid-template-columns: 1fr auto; }
+      .url-input { grid-column: 1 / -1; }
+      .button-primary { flex: 1; }
+      .result { grid-template-columns: 1fr; }
+      .thumb-wrap { max-height: 250px; }
+      .fineprint { grid-template-columns: 1fr; gap: 18px; }
+    }
+
+    @media (max-width: 460px) {
+      .shell { width: min(100% - 18px, 1080px); padding-top: max(18px, env(safe-area-inset-top)); }
+      h1 { font-size: clamp(39px, 13vw, 54px); }
+      .lead { margin-top: 18px; }
+      .platforms { gap: 6px; }
+      .platform { padding: 6px 9px; font-size: 11px; }
+      .transfer-visual { display: none; }
+      .card { padding: 15px; border-radius: 15px; }
+      .input-shell { gap: 8px; padding: 7px; }
+      .button { min-height: 48px; padding: 0 14px; }
+      .choices { grid-template-columns: 1fr; }
+      .helper { display: block; }
+      .helper span:last-child { display: block; margin-top: 4px; }
+      .result { gap: 18px; margin-top: 20px; padding-top: 20px; }
+      .choice { min-height: 66px; }
+      .progress-head { align-items: center; }
+      .progress-foot { align-items: flex-end; }
+      .progress-detail { max-width: 75%; }
+    }
+
+    @media (pointer: coarse) {
+      .button, .tab, .choice { min-height: 48px; }
+      .choice:hover, .button:hover { transform: none; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">↓</span> Linkdrop</div>
+      <div class="status-pill"><span class="status-dot"></span> Siap memproses media publik</div>
+    </header>
+
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="kicker">Ruang transfer media pribadi</p>
+        <h1>Pindahkan media tanpa menebak kualitas.</h1>
+        <p class="lead">Tempel link publik. Linkdrop membaca format sumber dan menyiapkan video, audio, foto, atau carousel sesuai pilihanmu.</p>
+        <div class="platforms" aria-label="Platform populer">
+          <span class="platform">YouTube</span>
+          <span class="platform">Instagram</span>
+          <span class="platform">TikTok</span>
+          <span class="platform">X / Twitter</span>
+          <span class="platform">Facebook</span>
+          <span class="platform">dan lainnya</span>
+        </div>
+      </div>
+      <div class="transfer-visual" aria-hidden="true">
+        <div class="media-slip"><span>Video</span><strong>2160p dengan audio</strong><i style="--meter: 86%"></i></div>
+        <div class="media-slip"><span>Audio</span><strong>Sumber atau MP3</strong><i style="--meter: 62%"></i></div>
+        <div class="media-slip"><span>Foto</span><strong>Resolusi asli</strong><i style="--meter: 74%"></i></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <form id="analyzeForm">
+        <label class="input-label" for="urlInput">Link media publik</label>
+        <div class="input-shell">
+          <input class="url-input" id="urlInput" type="url" inputmode="url" autocomplete="url" placeholder="https://..." required>
+          <button class="button button-quiet" id="pasteButton" type="button">Tempel</button>
+          <button class="button button-primary" id="analyzeButton" type="submit">Analisis link</button>
+        </div>
+        <div class="helper">
+          <span>Hanya konten publik yang dapat diproses.</span>
+          <span>Batas file server: {{ max_file_mb }} MB</span>
+        </div>
+      </form>
+
+      <div class="notice" id="errorBox" role="alert"></div>
+      <div class="loading" id="loading"><span class="spinner"></span><span>Membaca format dari platform sumber…</span></div>
+
+      <div class="result" id="result">
+        <div class="thumb-wrap">
+          <img class="thumb" id="thumbnail" alt="Pratinjau media">
+          <span class="source" id="platform">Media</span>
+        </div>
+        <div>
+          <h2 class="media-title" id="mediaTitle"></h2>
+          <p class="media-meta" id="mediaMeta"></p>
+          <div class="tabs" id="tabs">
+            <button class="tab" type="button" data-kind="video">Video</button>
+            <button class="tab" type="button" data-kind="audio">Audio</button>
+            <button class="tab" type="button" data-kind="photo">Foto</button>
+          </div>
+          <div class="choices" id="choices"></div>
+          <div class="download-progress" id="downloadProgress" role="progressbar" aria-label="Progres unduhan" aria-live="polite" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div class="progress-head">
+              <span class="progress-stage" id="progressStage">Menyiapkan unduhan</span>
+              <span class="progress-percent" id="progressPercent">0%</span>
+            </div>
+            <div class="progress-track"><div class="progress-bar" id="progressBar"></div></div>
+            <div class="progress-foot">
+              <p class="progress-detail" id="progressDetail">Jangan tutup halaman sampai file tersimpan.</p>
+              <button class="progress-cancel" id="cancelDownload" type="button">Batalkan</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="fineprint">
+      <div class="fineprint-item"><strong>Kualitas nyata</strong>Daftar dibuat dari format yang dilaporkan platform, diurutkan dari terendah ke tertinggi.</div>
+      <div class="fineprint-item"><strong>Konversi server</strong>Video dan audio diproses dengan FFmpeg. MP3 320 kbps tidak menambah detail melebihi sumber.</div>
+      <div class="fineprint-item"><strong>Privasi</strong>File diproses sementara dan dihapus setelah respons selesai. Aplikasi tidak menyimpan riwayat link.</div>
+    </section>
+
+    <footer>Gunakan hanya untuk konten milik sendiri, berlisensi, atau yang Anda punya izin untuk mengunduh. Patuhi hak cipta dan ketentuan platform.</footer>
+  </main>
+
+  <script>
+    const form = document.getElementById("analyzeForm");
+    const input = document.getElementById("urlInput");
+    const analyzeButton = document.getElementById("analyzeButton");
+    const pasteButton = document.getElementById("pasteButton");
+    const loading = document.getElementById("loading");
+    const result = document.getElementById("result");
+    const errorBox = document.getElementById("errorBox");
+    const choicesBox = document.getElementById("choices");
+    const downloadProgress = document.getElementById("downloadProgress");
+    const progressStage = document.getElementById("progressStage");
+    const progressPercent = document.getElementById("progressPercent");
+    const progressBar = document.getElementById("progressBar");
+    const progressDetail = document.getElementById("progressDetail");
+    const cancelDownload = document.getElementById("cancelDownload");
+    let mediaData = null;
+    let activeKind = "video";
+    let downloadActive = false;
+    let activeDownloadController = null;
+
+    function showError(message) {
+      errorBox.textContent = message;
+      errorBox.style.display = "block";
+    }
+
+    function clearError() {
+      errorBox.textContent = "";
+      errorBox.style.display = "none";
+    }
+
+    function formatDuration(seconds) {
+      if (!seconds) return null;
+      const total = Math.round(seconds);
+      const hours = Math.floor(total / 3600);
+      const minutes = Math.floor((total % 3600) / 60);
+      const secs = total % 60;
+      return hours
+        ? `${hours}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`
+        : `${minutes}:${String(secs).padStart(2, "0")}`;
+    }
+
+    function availableKinds() {
+      return ["video", "audio", "photo"].filter(kind => (mediaData?.choices?.[kind] || []).length);
+    }
+
+    function prettyBytes(value) {
+      if (!value) return "0 B";
+      const units = ["B", "KB", "MB", "GB"];
+      let size = value;
+      let unit = 0;
+      while (size >= 1024 && unit < units.length - 1) {
+        size /= 1024;
+        unit += 1;
+      }
+      return `${size.toFixed(unit ? 1 : 0)} ${units[unit]}`;
+    }
+
+    function updateDownloadProgress(percent, stage, detail = "") {
+      const safePercent = Math.max(0, Math.min(100, Number(percent) || 0));
+      downloadProgress.classList.add("visible");
+      downloadProgress.classList.remove("error");
+      downloadProgress.setAttribute("aria-valuenow", String(Math.round(safePercent)));
+      progressBar.style.width = `${safePercent}%`;
+      progressPercent.textContent = `${Math.round(safePercent)}%`;
+      progressStage.textContent = stage;
+      progressDetail.textContent = detail || "Jangan tutup halaman sampai file tersimpan.";
+    }
+
+    function failDownloadProgress(message) {
+      downloadProgress.classList.add("visible", "error");
+      progressStage.textContent = "Unduhan gagal";
+      progressDetail.textContent = message;
+    }
+
+    function decodeJson(bytes) {
+      return JSON.parse(new TextDecoder().decode(bytes));
+    }
+
+    async function createDownloadSink(metadata) {
+      if (navigator.storage?.getDirectory) {
+        try {
+          const root = await navigator.storage.getDirectory();
+          const temporaryName = `linkdrop-${crypto.randomUUID?.() || Date.now()}.part`;
+          const handle = await root.getFileHandle(temporaryName, { create: true });
+          const writable = await handle.createWritable();
+          return {
+            mode: "device",
+            async write(chunk) { await writable.write(chunk); },
+            async finish() {
+              await writable.close();
+              return {
+                blob: await handle.getFile(),
+                cleanup: () => root.removeEntry(temporaryName).catch(() => {})
+              };
+            },
+            async discard() {
+              try { await writable.abort(); } catch {}
+              try { await root.removeEntry(temporaryName); } catch {}
+            }
+          };
+        } catch {
+          // Private browsing and older mobile browsers may not expose OPFS.
+        }
+      }
+
+      const parts = [];
+      return {
+        mode: "memory",
+        async write(chunk) { parts.push(chunk); },
+        async finish() {
+          return {
+            blob: new Blob(parts, { type: metadata.content_type || "application/octet-stream" }),
+            cleanup: () => {}
+          };
+        },
+        async discard() { parts.length = 0; }
+      };
+    }
+
+    async function startDownload(choice) {
+      if (downloadActive) return;
+      downloadActive = true;
+      activeDownloadController = new AbortController();
+      clearError();
+      result.classList.add("is-downloading");
+      cancelDownload.classList.add("visible");
+      input.disabled = true;
+      pasteButton.disabled = true;
+      analyzeButton.disabled = true;
+      updateDownloadProgress(0, `Menyiapkan ${choice.label}`, "Menghubungi server…");
+
+      let metadata = null;
+      let receivedFileBytes = 0;
+      let downloadSink = null;
+
+      try {
+        const separator = choice.download_url.includes("?") ? "&" : "?";
+        const response = await fetch(`${choice.download_url}${separator}progress=1`, {
+          signal: activeDownloadController.signal
+        });
+        const contentType = response.headers.get("content-type") || "";
+        if (!response.ok || !contentType.includes("application/vnd.linkdrop.progress")) {
+          let message = "Unduhan tidak dapat dimulai.";
+          try {
+            const payload = await response.json();
+            message = payload.error || message;
+          } catch {}
+          throw new Error(message);
+        }
+        if (!response.body) throw new Error("Browser tidak mendukung progres unduhan streaming.");
+
+        const reader = response.body.getReader();
+        let pending = new Uint8Array(0);
+        let completed = false;
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+
+          const buffer = new Uint8Array(pending.length + value.length);
+          buffer.set(pending);
+          buffer.set(value, pending.length);
+          let offset = 0;
+
+          while (buffer.length - offset >= 5) {
+            const frameType = String.fromCharCode(buffer[offset]);
+            const frameLength = new DataView(buffer.buffer, buffer.byteOffset + offset + 1, 4).getUint32(0);
+            if (buffer.length - offset - 5 < frameLength) break;
+            const payload = buffer.slice(offset + 5, offset + 5 + frameLength);
+            offset += 5 + frameLength;
+
+            if (frameType === "P") {
+              const event = decodeJson(payload);
+              updateDownloadProgress(event.percent, event.phase, event.detail);
+            } else if (frameType === "M") {
+              metadata = decodeJson(payload);
+              receivedFileBytes = 0;
+              downloadSink = await createDownloadSink(metadata);
+              const storageLabel = downloadSink.mode === "device" ? "penyimpanan sementara perangkat" : "memori browser";
+              updateDownloadProgress(92, "Mengirim file ke browser", `0 B dari ${prettyBytes(metadata.size)} · ${storageLabel}`);
+            } else if (frameType === "D") {
+              if (!downloadSink) throw new Error("Metadata file tidak diterima dengan benar.");
+              await downloadSink.write(payload);
+              receivedFileBytes += payload.length;
+              const fraction = metadata?.size ? receivedFileBytes / metadata.size : 0;
+              updateDownloadProgress(
+                92 + Math.min(fraction, 1) * 8,
+                "Mengirim file ke browser",
+                `${prettyBytes(receivedFileBytes)} dari ${prettyBytes(metadata?.size)}`
+              );
+            } else if (frameType === "E") {
+              throw new Error(decodeJson(payload).error || "Unduhan gagal diproses.");
+            } else if (frameType === "C") {
+              completed = true;
+            }
+          }
+          pending = buffer.slice(offset);
+        }
+
+        if (!completed || !metadata) throw new Error("Koneksi terputus sebelum unduhan selesai.");
+        const savedFile = await downloadSink.finish();
+        downloadSink = null;
+        const objectUrl = URL.createObjectURL(savedFile.blob);
+        const saveLink = document.createElement("a");
+        saveLink.href = objectUrl;
+        saveLink.download = metadata.filename || "download";
+        document.body.appendChild(saveLink);
+        saveLink.click();
+        saveLink.remove();
+        window.setTimeout(() => {
+          URL.revokeObjectURL(objectUrl);
+          savedFile.cleanup();
+        }, 60000);
+        updateDownloadProgress(100, "Unduhan selesai", `${metadata.filename} sudah dikirim ke browser.`);
+      } catch (error) {
+        if (downloadSink) await downloadSink.discard();
+        const wasCancelled = error.name === "AbortError";
+        const message = wasCancelled ? "Unduhan dibatalkan." : (error.message || "Terjadi kesalahan saat mengunduh.");
+        failDownloadProgress(message);
+        if (!wasCancelled) showError(message);
+      } finally {
+        downloadActive = false;
+        activeDownloadController = null;
+        cancelDownload.classList.remove("visible");
+        result.classList.remove("is-downloading");
+        input.disabled = false;
+        pasteButton.disabled = false;
+        analyzeButton.disabled = false;
+      }
+    }
+
+    function renderChoices(kind) {
+      activeKind = kind;
+      document.querySelectorAll(".tab").forEach(tab => {
+        tab.classList.toggle("active", tab.dataset.kind === kind);
+      });
+      choicesBox.replaceChildren();
+
+      (mediaData.choices[kind] || []).forEach(choice => {
+        const link = document.createElement("a");
+        link.className = "choice";
+        link.href = choice.download_url;
+        link.innerHTML = "<span><strong></strong><small></small></span><span class=\"choice-arrow\">↓</span>";
+        link.querySelector("strong").textContent = choice.label;
+        link.querySelector("small").textContent = choice.detail;
+        link.addEventListener("click", event => {
+          event.preventDefault();
+          startDownload(choice);
+        });
+        choicesBox.appendChild(link);
+      });
+    }
+
+    function renderResult(data) {
+      mediaData = data;
+      downloadProgress.classList.remove("visible", "error");
+      const thumbnail = document.getElementById("thumbnail");
+      thumbnail.src = data.thumbnail || "";
+      thumbnail.style.display = data.thumbnail ? "block" : "none";
+      document.getElementById("platform").textContent = data.platform || "Media";
+      document.getElementById("mediaTitle").textContent = data.title;
+
+      const metadata = [data.uploader, formatDuration(data.duration), data.item_count > 1 ? `${data.item_count} item` : null].filter(Boolean);
+      document.getElementById("mediaMeta").textContent = metadata.join(" · ") || "Format siap dipilih";
+
+      const kinds = availableKinds();
+      document.querySelectorAll(".tab").forEach(tab => {
+        tab.disabled = !kinds.includes(tab.dataset.kind);
+      });
+      activeKind = kinds[0] || "video";
+      renderChoices(activeKind);
+      result.style.display = "grid";
+    }
+
+    async function analyze(event) {
+      event.preventDefault();
+      clearError();
+      result.style.display = "none";
+      loading.style.display = "flex";
+      analyzeButton.disabled = true;
+      analyzeButton.textContent = "Menganalisis…";
+
+      try {
+        const response = await fetch("/api/info", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: input.value.trim() })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Link tidak dapat diproses.");
+        renderResult(data);
+      } catch (error) {
+        showError(error.message || "Terjadi kesalahan. Silakan coba lagi.");
+      } finally {
+        loading.style.display = "none";
+        analyzeButton.disabled = false;
+        analyzeButton.textContent = "Analisis link";
+      }
+    }
+
+    form.addEventListener("submit", analyze);
+    document.querySelectorAll(".tab").forEach(tab => {
+      tab.addEventListener("click", () => renderChoices(tab.dataset.kind));
+    });
+    cancelDownload.addEventListener("click", () => activeDownloadController?.abort());
+    pasteButton.addEventListener("click", async () => {
+      try {
+        input.value = await navigator.clipboard.readText();
+        input.focus();
+      } catch {
+        input.focus();
+        showError("Browser tidak memberi izin membaca clipboard. Tempel link secara manual.");
+      }
+    });
+  </script>
+</body>
+</html>
