@@ -76,7 +76,7 @@ Buka alamat HTTPS tersebut dari perangkat yang tersambung ke tailnet yang sama.
 3. Buka alamat HTTPS dari `tailscale serve status`.
 4. Tempel link media publik yang boleh diunduh, lalu pilih format.
 5. Tunggu pemrosesan dan transfer mencapai 100%.
-6. Tekan **Simpan ke perangkat**. Pada browser ponsel, pilih **Simpan ke File** atau tindakan sejenis melalui menu bagikan.
+6. Pada dialog simpan, gunakan nama default atau ubah namanya; Linkdrop tetap mempertahankan ekstensi asli. Tekan **Simpan sekarang**. Pada browser ponsel, pilih **Simpan ke File** atau tindakan sejenis melalui menu bagikan.
 
 Ponsel tidak harus berada pada Wi-Fi yang sama dengan komputer host. Data seluler dapat digunakan selama kedua perangkat terhubung ke tailnet yang sama.
 

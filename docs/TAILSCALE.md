@@ -76,7 +76,7 @@ Open that HTTPS address on any device connected to the same tailnet.
 3. Open the HTTPS address reported by `tailscale serve status`.
 4. Paste a permitted public media link and choose a format.
 5. Wait until processing and transfer reach 100%.
-6. Select **Simpan ke perangkat**. On mobile browsers, choose **Save to Files** or the equivalent action from the share sheet.
+6. In the save dialog, keep the default filename or edit it; Linkdrop retains the original extension. Select **Simpan sekarang**. On mobile browsers, choose **Save to Files** or the equivalent action from the share sheet.
 
 The phone does not need to use the same Wi-Fi as the host. Mobile data works as long as both devices are connected to the same tailnet.
 

@@ -37,7 +37,7 @@ Flask API ─── yt-dlp ─── FFmpeg
 3. yt-dlp downloads the selected source streams.
 4. FFmpeg merges the selected streams and validates MP4 codec compatibility.
 5. VP9, AV1, unsupported pixel formats, and non-AAC audio are converted to H.264/AAC when required for broad device playback.
-6. The result is streamed to browser-managed temporary storage and exposed through an explicit save action.
+6. The result is streamed to browser-managed temporary storage and exposed through a save dialog. The dialog starts with the server-provided filename, permits editing the name, and preserves the original extension before invoking the browser or operating system save flow.
 7. Temporary files are deleted after completion, cancellation, or failure.
 
 When `progress=1` is present, progress frames, metadata, data chunks, and completion status travel in the same response. This keeps the operation bound to one application instance.

@@ -21,7 +21,7 @@ Linkdrop is a responsive web application for inspecting and downloading public m
 - Keeps single-link downloads as the default and offers an optional multi-link queue with per-item selection.
 - Combines selected links into a flat, storage-aware ZIP; galleries become folders instead of ZIP files inside ZIP files.
 - Displays live download, processing, and transfer progress with cancellation support.
-- Uses an explicit save action that works with desktop pickers, mobile share sheets, and browser downloads.
+- Uses an explicit save action where users can keep the suggested filename or edit it; the original extension is preserved across desktop pickers, mobile share sheets, and browser downloads.
 - Uses signed, expiring download tokens and blocks private-network URLs.
 - Provides a responsive UI, PWA metadata, iOS safe areas, accessible focus states, and reduced-motion support.
 - Runs without a database or persistent job state.
@@ -44,6 +44,10 @@ The download protocol carries progress events and file bytes in one HTTP respons
 
 `Single link` remains the default mode. Select `Multiple links` to paste one public URL per line, analyze at most two URLs concurrently, choose the output for each item, and download only the checked items as one flat ZIP. Carousel and gallery assets are placed in a named folder inside that ZIP, so no second extraction is needed. More than 10 selections show a warning; packages contain at most 30 selected links and are split at 80% of the safe temporary-storage limit. Package downloads remain sequential so the next ZIP does not replace an unsaved file.
 
+### Saving a file
+
+When processing reaches 100%, Linkdrop opens a save dialog with the server-provided filename. Edit the name if needed, or leave it unchanged to use the default. Linkdrop keeps the original extension so the downloaded file remains associated with its media type. The final save location is selected by the browser or operating system: a desktop file picker when supported, a mobile share sheet when available, or the browser's normal download location otherwise.
+
 ## Requirements
 
 - Python 3.12 or newer
@@ -63,16 +67,12 @@ pip install -r requirements.txt
 
 cp .env.example .env
 export DOWNLOAD_TOKEN_SECRET="$(openssl rand -hex 32)"
-python app.py
+PORT=5000 gunicorn --bind 127.0.0.1:5000 --workers 1 --threads 4 --timeout 0 app:app
 ```
 
 Open [http://127.0.0.1:5000](http://127.0.0.1:5000).
 
-On macOS, install the native dependencies with:
-
-```bash
-brew install ffmpeg deno
-```
+This native quick start is for macOS and Linux. For Windows Docker Desktop, platform-specific packages, permissions, and private phone access, see the [Installation Guide](docs/INSTALLATION.md). Use `python app.py` only for temporary development, because its development server binds to network interfaces.
 
 ## Private access from a phone
 
@@ -187,6 +187,7 @@ Add `?progress=1` to the download endpoint to use Linkdrop's framed progress str
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
+- [Installation Guide](docs/INSTALLATION.md)
 - [Deployment Guide](docs/DEPLOYMENT.md)
 - [Private Tailscale Access](docs/TAILSCALE.md)
 - [Product Requirements](docs/PRD.md)

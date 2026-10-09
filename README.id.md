@@ -21,7 +21,7 @@ Linkdrop adalah aplikasi web responsif untuk menganalisis dan mengunduh media pu
 - Mempertahankan unduhan satu link sebagai mode utama dan menyediakan antrean multi-link opsional dengan pilihan per media.
 - Menggabungkan link pilihan dalam ZIP datar sesuai kapasitas penyimpanan; galeri menjadi folder, bukan ZIP di dalam ZIP.
 - Menampilkan progres download, pemrosesan, dan transfer secara langsung serta dapat dibatalkan.
-- Menyediakan tombol simpan yang mendukung file picker desktop, menu bagikan ponsel, dan download browser.
+- Menyediakan dialog simpan yang dapat memakai atau mengubah nama file, sambil mempertahankan ekstensi asli di file picker desktop, menu bagikan ponsel, dan download browser.
 - Menggunakan token bertanda tangan yang kedaluwarsa dan memblokir URL jaringan privat.
 - Memiliki UI responsif, metadata PWA, dukungan safe area iOS, fokus yang aksesibel, dan reduced motion.
 - Berjalan tanpa database maupun state job persisten.
@@ -44,6 +44,10 @@ Progres dan byte file dikirim melalui satu respons HTTP. Setiap worker sementara
 
 `Satu link` tetap menjadi mode utama. Pilih `Beberapa link` untuk menempel satu URL publik per baris, menganalisis maksimal dua URL bersamaan, menentukan output setiap media, dan hanya mengunduh media yang dicentang dalam satu ZIP datar. Aset carousel dan galeri ditempatkan dalam folder bernama di dalam ZIP tersebut, sehingga tidak perlu ekstraksi kedua. Pilihan di atas 10 media menampilkan peringatan; setiap paket memuat maksimal 30 link pilihan dan dibagi pada 80% batas aman penyimpanan sementara. Paket diunduh berurutan agar ZIP berikutnya tidak menggantikan file yang belum disimpan.
 
+### Menyimpan file
+
+Saat pemrosesan mencapai 100%, Linkdrop membuka dialog simpan dengan nama file dari server. Anda dapat mengubah nama tersebut atau membiarkannya sebagai nama default. Linkdrop mempertahankan ekstensi asli agar file tetap dikenali sebagai jenis media yang benar. Lokasi akhir dipilih oleh browser atau sistem operasi: file picker desktop bila didukung, menu bagikan di ponsel bila tersedia, atau lokasi unduhan normal browser.
+
 ## Kebutuhan sistem
 
 - Python 3.12 atau lebih baru
@@ -63,16 +67,12 @@ pip install -r requirements.txt
 
 cp .env.example .env
 export DOWNLOAD_TOKEN_SECRET="$(openssl rand -hex 32)"
-python app.py
+PORT=5000 gunicorn --bind 127.0.0.1:5000 --workers 1 --threads 4 --timeout 0 app:app
 ```
 
 Buka [http://127.0.0.1:5000](http://127.0.0.1:5000).
 
-Untuk macOS, pasang dependency native dengan:
-
-```bash
-brew install ffmpeg deno
-```
+Quick start native ini untuk macOS dan Linux. Untuk Windows Docker Desktop, paket khusus platform, izin, dan akses privat dari ponsel, baca [Panduan Instalasi](docs/INSTALLATION.id.md). Gunakan `python app.py` hanya untuk development sementara karena server development tersebut bind ke antarmuka jaringan.
 
 ## Akses privat dari ponsel
 
@@ -185,6 +185,7 @@ Tambahkan `?progress=1` pada endpoint download untuk menggunakan progress stream
 ## Dokumentasi
 
 - [Arsitektur](docs/ARCHITECTURE.md)
+- [Panduan Instalasi](docs/INSTALLATION.id.md)
 - [Panduan Deployment](docs/DEPLOYMENT.md)
 - [Akses Privat Tailscale](docs/TAILSCALE.id.md)
 - [Product Requirements](docs/PRD.md)
