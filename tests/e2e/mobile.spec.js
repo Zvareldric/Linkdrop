@@ -12,6 +12,8 @@ const mediaPayload = {
       id: "video:720",
       label: "720p",
       detail: "MP4 · hingga 720p · ~12 MB",
+      estimated_bytes: 12 * 1024 * 1024,
+      token: "mock-token",
       download_url: "/api/download/mock"
     }],
     audio: [],
@@ -91,4 +93,63 @@ test("alur analisis berakhir pada tombol simpan yang dapat mengunduh file", asyn
   const download = await downloadPromise;
 
   expect(download.suggestedFilename()).toBe("contoh.mp4");
+});
+
+test("menu beberapa link hanya mengunduh media yang dipilih", async ({ page }) => {
+  await page.route("**/api/info", async route => {
+    const url = route.request().postDataJSON().url;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ...mediaPayload, title: url.endsWith("/two") ? "Media kedua" : "Media pertama" })
+    });
+  });
+
+  const archiveBytes = Buffer.from("zip-bytes", "utf8");
+  const responseBody = Buffer.concat([
+    frame("P", { percent: 50, phase: "Mengunduh media · 1/1", detail: "1 MB/s" }),
+    frame("M", { filename: "linkdrop-part-1.zip", content_type: "application/zip", size: archiveBytes.length }),
+    frame("D", archiveBytes),
+    frame("C", { ok: true })
+  ]);
+  await page.route("**/api/batch/download?progress=1", async route => {
+    expect(route.request().postDataJSON().tokens).toEqual(["mock-token"]);
+    await route.fulfill({
+      status: 200,
+      contentType: "application/vnd.linkdrop.progress",
+      body: responseBody
+    });
+  });
+
+  await page.getByRole("tab", { name: "Beberapa link" }).click();
+  await expect(page.getByLabel("Tempel beberapa link")).toBeVisible();
+  await expect(page.getByLabel("Tempel link media")).toBeHidden();
+  await expect(page.getByRole("button", { name: "Analisis antrean berikutnya" })).toBeHidden();
+  await page.getByLabel("Tempel beberapa link").fill("https://example.com/one\nhttps://example.com/two");
+  await page.getByRole("button", { name: "Analisis semua" }).click();
+
+  await expect(page.locator(".batch-item")).toHaveCount(2);
+  await expect(page.getByText("2 dari 2 media dipilih")).toBeVisible();
+  await page.locator(".batch-check").nth(1).uncheck();
+  await expect(page.getByText("1 dari 2 media dipilih")).toBeVisible();
+  await page.getByRole("button", { name: "Unduh sebagai ZIP" }).click();
+
+  await expect(page.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "100");
+  await expect(page.getByText("File siap disimpan", { exact: true })).toBeVisible();
+});
+
+test("antrean di atas sepuluh media menampilkan peringatan", async ({ page }) => {
+  await page.route("**/api/info", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(mediaPayload)
+  }));
+  const urls = Array.from({ length: 11 }, (_, index) => `https://example.com/media-${index + 1}`).join("\n");
+
+  await page.getByRole("tab", { name: "Beberapa link" }).click();
+  await page.getByLabel("Tempel beberapa link").fill(urls);
+  await page.getByRole("button", { name: "Analisis semua" }).click();
+
+  await expect(page.locator(".batch-item")).toHaveCount(11);
+  await expect(page.getByText("11 media akan diproses secara bertahap.", { exact: false })).toBeVisible();
 });

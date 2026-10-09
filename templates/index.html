@@ -28,6 +28,7 @@
     }
 
     * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
 
     body {
       margin: 0;
@@ -41,7 +42,7 @@
       -webkit-font-smoothing: antialiased;
     }
 
-    button, input, a { font: inherit; }
+    button, input, textarea, select, a { font: inherit; }
     button, a { -webkit-tap-highlight-color: transparent; }
 
     :focus-visible {
@@ -200,6 +201,156 @@
       border-radius: var(--radius);
       box-shadow: 0 22px 55px rgba(42, 62, 105, .11);
     }
+
+    .mode-switch {
+      display: inline-flex;
+      gap: 5px;
+      margin-bottom: 22px;
+      padding: 4px;
+      background: #edf1f7;
+      border-radius: 13px;
+    }
+
+    .mode-button {
+      min-height: 44px;
+      padding: 0 16px;
+      color: var(--muted);
+      background: transparent;
+      border: 0;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 750;
+    }
+
+    .mode-button.active {
+      color: white;
+      background: var(--signal);
+      box-shadow: 0 5px 14px rgba(49, 87, 213, .2);
+    }
+
+    .batch-panel { display: none; }
+    .batch-panel.visible { display: block; }
+
+    .batch-input-shell {
+      display: grid;
+      gap: 10px;
+      padding: 8px;
+      background: white;
+      border: 1px solid #cbd5e3;
+      border-radius: 16px;
+      transition: border-color .2s, box-shadow .2s;
+    }
+
+    .batch-input-shell:focus-within {
+      border-color: var(--signal);
+      box-shadow: 0 0 0 4px rgba(49, 87, 213, .1);
+    }
+
+    .batch-textarea {
+      width: 100%;
+      min-height: 132px;
+      resize: vertical;
+      padding: 13px 12px;
+      color: var(--ink);
+      background: transparent;
+      border: 0;
+      outline: 0;
+      font-size: 15px;
+      line-height: 1.55;
+    }
+
+    .batch-input-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .batch-message {
+      display: none;
+      margin-top: 14px;
+      padding: 13px 15px;
+      color: #73510a;
+      background: #fff8df;
+      border: 1px solid #ecd68b;
+      border-radius: 12px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .batch-message.visible { display: block; }
+    .batch-message.error { color: #8d2323; background: #fff0ee; border-color: #f2b7b0; }
+
+    .batch-toolbar {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      margin-top: 22px;
+      padding-top: 20px;
+      border-top: 1px solid var(--line);
+    }
+
+    .batch-toolbar.visible { display: flex; }
+    .batch-toolbar strong { display: block; font-size: 14px; }
+    .batch-toolbar span { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }
+
+    .batch-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .batch-item {
+      display: grid;
+      grid-template-columns: auto 56px minmax(0, 1fr);
+      align-items: center;
+      gap: 12px;
+      padding: 13px;
+      background: #f8f9fc;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+    }
+
+    .batch-check { width: 18px; height: 18px; accent-color: var(--signal); }
+    .batch-thumb { width: 56px; height: 56px; object-fit: cover; background: #dfe5ed; border-radius: 10px; }
+    .batch-item-body { min-width: 0; }
+    .batch-item-title { overflow: hidden; margin: 0; font-size: 13px; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
+    .batch-item-meta { margin: 4px 0 8px; color: var(--muted); font-size: 11px; }
+    .batch-choice {
+      width: 100%;
+      min-height: 40px;
+      padding: 0 34px 0 10px;
+      color: var(--ink);
+      background: white;
+      border: 1px solid #cbd5e3;
+      border-radius: 9px;
+      font-size: 12px;
+    }
+
+    .batch-item.pending .batch-thumb { opacity: .45; }
+    .batch-item.error { border-color: #f2b7b0; background: #fff7f5; }
+    .batch-item.error .batch-item-meta { color: var(--danger); }
+
+    .batch-packages {
+      display: grid;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .batch-package {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 13px;
+      background: #f1f4fa;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+
+    .batch-package strong { display: block; font-size: 12px; }
+    .batch-package span { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
 
     .input-label {
       display: block;
@@ -556,6 +707,10 @@
       .result { grid-template-columns: 1fr; }
       .thumb-wrap { max-height: 250px; }
       .fineprint { grid-template-columns: 1fr; gap: 18px; }
+      .batch-toolbar { align-items: flex-start; flex-direction: column; }
+      .batch-input-actions { display: grid; grid-template-columns: 1fr 1fr; }
+      .batch-package { align-items: stretch; flex-direction: column; }
+      .batch-package .button { width: 100%; }
     }
 
     @media (max-width: 460px) {
@@ -576,6 +731,9 @@
       .progress-head { align-items: center; }
       .progress-actions { justify-content: stretch; }
       .progress-actions button { flex: 1; justify-content: center; }
+      .mode-switch { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+      .batch-item { grid-template-columns: auto 46px minmax(0, 1fr); }
+      .batch-thumb { width: 46px; height: 46px; }
     }
 
     @media (pointer: coarse) {
@@ -617,6 +775,12 @@
     </section>
 
     <section class="card">
+      <div class="mode-switch" role="tablist" aria-label="Jenis unduhan">
+        <button class="mode-button active" id="singleModeButton" type="button" role="tab" aria-selected="true" aria-controls="singlePanel">Satu link</button>
+        <button class="mode-button" id="batchModeButton" type="button" role="tab" aria-selected="false" aria-controls="batchPanel">Beberapa link</button>
+      </div>
+
+      <div id="singlePanel" role="tabpanel" aria-labelledby="singleModeButton">
       <form id="analyzeForm">
         <label class="input-label" for="urlInput">Tempel link media</label>
         <div class="input-shell">
@@ -647,19 +811,52 @@
             <button class="tab" type="button" data-kind="photo">Foto</button>
           </div>
           <div class="choices" id="choices"></div>
-          <div class="download-progress" id="downloadProgress" role="progressbar" aria-label="Progres unduhan" aria-live="polite" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-            <div class="progress-head">
-              <span class="progress-stage" id="progressStage">Menyiapkan unduhan</span>
-              <span class="progress-percent" id="progressPercent">0%</span>
+        </div>
+      </div>
+      </div>
+
+      <div class="batch-panel" id="batchPanel" role="tabpanel" aria-labelledby="batchModeButton">
+        <form id="batchForm">
+          <label class="input-label" for="batchInput">Tempel beberapa link</label>
+          <div class="batch-input-shell">
+            <textarea class="batch-textarea" id="batchInput" inputmode="url" placeholder="Satu link per baris" required></textarea>
+            <div class="batch-input-actions">
+              <button class="button button-quiet" id="batchPasteButton" type="button">Tempel</button>
+              <button class="button button-primary" id="batchAnalyzeButton" type="submit">Analisis semua</button>
             </div>
-            <div class="progress-track"><div class="progress-bar" id="progressBar"></div></div>
-            <div class="progress-foot">
-              <p class="progress-detail" id="progressDetail">Jangan tutup halaman sampai file tersimpan.</p>
-              <div class="progress-actions">
-                <button class="progress-cancel" id="cancelDownload" type="button">Batalkan</button>
-                <button class="progress-save" id="saveDownload" type="button">Simpan ke perangkat</button>
-              </div>
-            </div>
+          </div>
+          <div class="helper">
+            <span>Maksimal {{ max_batch_items }} media per paket. Link selebihnya masuk antrean berikutnya.</span>
+            <span>Batas aman paket: {{ (batch_limit_bytes / 1024 / 1024) | round | int }} MB</span>
+          </div>
+        </form>
+
+        <div class="batch-message" id="batchMessage" role="status"></div>
+        <div class="batch-toolbar" id="batchToolbar">
+          <div>
+            <strong id="batchSummary">Belum ada media dipilih</strong>
+            <span id="batchSummaryDetail">Pilih media dan kualitas yang ingin diunduh.</span>
+          </div>
+          <div>
+            <button class="button button-quiet" id="batchSelectAll" type="button">Batalkan semua pilihan</button>
+          </div>
+        </div>
+        <div class="batch-list" id="batchList"></div>
+        <div class="batch-packages" id="batchPackages"></div>
+        <button class="button button-quiet" id="batchContinue" type="button" hidden>Analisis antrean berikutnya</button>
+      </div>
+
+      <div class="download-progress" id="downloadProgress" role="progressbar" aria-label="Progres unduhan" aria-live="polite" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div class="progress-head">
+          <span class="progress-stage" id="progressStage">Menyiapkan unduhan</span>
+          <span class="progress-percent" id="progressPercent">0%</span>
+        </div>
+        <div class="progress-track"><div class="progress-bar" id="progressBar"></div></div>
+        <div class="progress-foot">
+          <p class="progress-detail" id="progressDetail">Jangan tutup halaman sampai file tersimpan.</p>
+          <div class="progress-actions">
+            <button class="progress-cancel" id="cancelDownload" type="button">Batalkan</button>
+            <button class="progress-save" id="saveDownload" type="button">Simpan ke perangkat</button>
           </div>
         </div>
       </div>
@@ -690,12 +887,35 @@
     const progressDetail = document.getElementById("progressDetail");
     const cancelDownload = document.getElementById("cancelDownload");
     const saveDownload = document.getElementById("saveDownload");
+    const singlePanel = document.getElementById("singlePanel");
+    const singleModeButton = document.getElementById("singleModeButton");
+    const batchModeButton = document.getElementById("batchModeButton");
+    const batchPanel = document.getElementById("batchPanel");
+    const batchForm = document.getElementById("batchForm");
+    const batchInput = document.getElementById("batchInput");
+    const batchPasteButton = document.getElementById("batchPasteButton");
+    const batchAnalyzeButton = document.getElementById("batchAnalyzeButton");
+    const batchMessage = document.getElementById("batchMessage");
+    const batchToolbar = document.getElementById("batchToolbar");
+    const batchSummary = document.getElementById("batchSummary");
+    const batchSummaryDetail = document.getElementById("batchSummaryDetail");
+    const batchSelectAll = document.getElementById("batchSelectAll");
+    const batchList = document.getElementById("batchList");
+    const batchPackages = document.getElementById("batchPackages");
+    const batchContinue = document.getElementById("batchContinue");
+    const batchLimitBytes = {{ batch_limit_bytes }};
+    const batchTargetBytes = Math.floor(batchLimitBytes * .8);
+    const batchWarningItems = {{ batch_warning_items }};
+    const maxBatchItems = {{ max_batch_items }};
     let mediaData = null;
     let activeKind = "video";
     let downloadActive = false;
     let activeDownloadController = null;
     let preparedDownload = null;
     let preparedCleanupTimer = null;
+    let batchItems = [];
+    let pendingBatchUrls = [];
+    let currentBatchPackages = [];
 
     function showError(message) {
       errorBox.textContent = message;
@@ -705,6 +925,42 @@
     function clearError() {
       errorBox.textContent = "";
       errorBox.style.display = "none";
+    }
+
+    function showBatchMessage(message, error = false) {
+      batchMessage.textContent = message;
+      batchMessage.classList.toggle("error", error);
+      batchMessage.classList.toggle("visible", Boolean(message));
+    }
+
+    function setMode(mode) {
+      if (downloadActive) return;
+      const batch = mode === "batch";
+      singlePanel.hidden = batch;
+      batchPanel.classList.toggle("visible", batch);
+      singleModeButton.classList.toggle("active", !batch);
+      batchModeButton.classList.toggle("active", batch);
+      singleModeButton.setAttribute("aria-selected", String(!batch));
+      batchModeButton.setAttribute("aria-selected", String(batch));
+      (batch ? batchInput : input).focus();
+    }
+
+    function parseBatchUrls(value) {
+      const seen = new Set();
+      return value
+        .split(/[\n\r\s]+/)
+        .map(url => url.trim())
+        .filter(url => {
+          if (!url || seen.has(url)) return false;
+          try {
+            const parsed = new URL(url);
+            if (!["http:", "https:"].includes(parsed.protocol)) return false;
+          } catch {
+            return false;
+          }
+          seen.add(url);
+          return true;
+        });
     }
 
     function formatDuration(seconds) {
@@ -775,7 +1031,8 @@
         blob: savedFile.blob,
         objectUrl,
         filename: metadata.filename || "download",
-        cleanup: savedFile.cleanup
+        cleanup: savedFile.cleanup,
+        saved: false
       };
       saveDownload.classList.add("visible");
     }
@@ -803,6 +1060,7 @@
           });
           const writable = await handle.createWritable();
           await currentDownload.blob.stream().pipeTo(writable);
+          currentDownload.saved = true;
           updateDownloadProgress(100, "File tersimpan", `${currentDownload.filename} berhasil disimpan ke perangkat.`);
           schedulePreparedDownloadCleanup(currentDownload);
           return;
@@ -818,6 +1076,7 @@
       if (typeof navigator.share === "function" && navigator.canShare?.({ files: [sharedFile] })) {
         try {
           await navigator.share({ files: [sharedFile], title: currentDownload.filename });
+          currentDownload.saved = true;
           updateDownloadProgress(100, "Menu simpan dibuka", "Pilih “Simpan ke File” untuk menyelesaikan penyimpanan.");
           schedulePreparedDownloadCleanup(currentDownload);
           return;
@@ -837,6 +1096,7 @@
       document.body.appendChild(fallbackLink);
       fallbackLink.click();
       fallbackLink.remove();
+      currentDownload.saved = true;
       updateDownloadProgress(
         100,
         "Penyimpanan dimulai",
@@ -886,7 +1146,7 @@
       };
     }
 
-    async function startDownload(choice) {
+    async function startDownload(choice, requestConfig = {}) {
       if (downloadActive) return;
       disposePreparedDownload();
       downloadActive = true;
@@ -897,6 +1157,11 @@
       input.disabled = true;
       pasteButton.disabled = true;
       analyzeButton.disabled = true;
+      batchInput.disabled = true;
+      batchPasteButton.disabled = true;
+      batchAnalyzeButton.disabled = true;
+      singleModeButton.disabled = true;
+      batchModeButton.disabled = true;
       updateDownloadProgress(0, `Menyiapkan ${choice.label}`, "Menghubungi server…");
 
       let metadata = null;
@@ -904,8 +1169,10 @@
       let downloadSink = null;
 
       try {
-        const separator = choice.download_url.includes("?") ? "&" : "?";
-        const response = await fetch(`${choice.download_url}${separator}progress=1`, {
+        const separator = choice.download_url?.includes("?") ? "&" : "?";
+        const requestUrl = requestConfig.url || `${choice.download_url}${separator}progress=1`;
+        const response = await fetch(requestUrl, {
+          ...(requestConfig.options || {}),
           signal: activeDownloadController.signal
         });
         const contentType = response.headers.get("content-type") || "";
@@ -976,12 +1243,16 @@
           "File siap disimpan",
           `Tekan “Simpan ke perangkat” untuk menyimpan ${metadata.filename}.`
         );
+        requestConfig.onPrepared?.(metadata);
       } catch (error) {
         if (downloadSink) await downloadSink.discard();
         const wasCancelled = error.name === "AbortError";
         const message = wasCancelled ? "Unduhan dibatalkan." : (error.message || "Terjadi kesalahan saat mengunduh.");
         failDownloadProgress(message);
-        if (!wasCancelled) showError(message);
+        if (!wasCancelled) {
+          if (batchPanel.classList.contains("visible")) showBatchMessage(message, true);
+          else showError(message);
+        }
       } finally {
         downloadActive = false;
         activeDownloadController = null;
@@ -990,6 +1261,11 @@
         input.disabled = false;
         pasteButton.disabled = false;
         analyzeButton.disabled = false;
+        batchInput.disabled = false;
+        batchPasteButton.disabled = false;
+        batchAnalyzeButton.disabled = false;
+        singleModeButton.disabled = false;
+        batchModeButton.disabled = false;
       }
     }
 
@@ -1037,6 +1313,241 @@
       result.style.display = "grid";
     }
 
+    function choicesForMedia(data) {
+      const kindLabels = { video: "Video", audio: "Audio", photo: "Foto" };
+      return ["video", "audio", "photo"].flatMap(kind =>
+        (data.choices?.[kind] || []).map(choice => ({
+          ...choice,
+          kind,
+          display: `${kindLabels[kind]} — ${choice.label}`
+        }))
+      );
+    }
+
+    function defaultBatchChoice(choices) {
+      let videoIndex = -1;
+      let audioIndex = -1;
+      let photoIndex = -1;
+      choices.forEach((choice, index) => {
+        if (choice.kind === "video") videoIndex = index;
+        if (choice.kind === "audio") audioIndex = index;
+        if (choice.kind === "photo" && photoIndex < 0) photoIndex = index;
+      });
+      return videoIndex >= 0 ? videoIndex : (photoIndex >= 0 ? photoIndex : audioIndex);
+    }
+
+    function selectedBatchItems() {
+      return batchItems.filter(item => item.status === "ready" && item.selected && item.choices[item.choiceIndex]);
+    }
+
+    function planBatchPackages(items) {
+      const packages = [];
+      let current = { items: [], estimatedBytes: 0, unknown: 0 };
+      for (const item of items) {
+        const choice = item.choices[item.choiceIndex];
+        const estimatedBytes = Number(choice.estimated_bytes) || 0;
+        const mustSplit = current.items.length && (
+          current.items.length >= maxBatchItems ||
+          (estimatedBytes && current.estimatedBytes + estimatedBytes > batchTargetBytes) ||
+          (!estimatedBytes && current.unknown >= 10)
+        );
+        if (mustSplit) {
+          packages.push(current);
+          current = { items: [], estimatedBytes: 0, unknown: 0 };
+        }
+        current.items.push(item);
+        current.estimatedBytes += estimatedBytes;
+        if (!estimatedBytes) current.unknown += 1;
+      }
+      if (current.items.length) packages.push(current);
+      return packages;
+    }
+
+    function renderBatchPackages(packages) {
+      batchPackages.replaceChildren();
+      packages.forEach((batchPackage, index) => {
+        const row = document.createElement("div");
+        row.className = "batch-package";
+        row.innerHTML = "<div><strong></strong><span></span></div><button class=\"button button-primary\" type=\"button\"></button>";
+        row.querySelector("strong").textContent = `Paket ${index + 1} · ${batchPackage.items.length} media`;
+        const unknownLabel = batchPackage.unknown ? ` + ${batchPackage.unknown} ukuran belum diketahui` : "";
+        row.querySelector("span").textContent = `${prettyBytes(batchPackage.estimatedBytes)}${unknownLabel}`;
+        const button = row.querySelector("button");
+        button.textContent = packages.length === 1 ? "Unduh sebagai ZIP" : `Unduh paket ${index + 1}`;
+        button.disabled = batchPackage.estimatedBytes > batchLimitBytes;
+        button.addEventListener("click", () => startBatchPackage(batchPackage, index + 1, button));
+        batchPackages.appendChild(row);
+      });
+    }
+
+    function updateBatchSummary() {
+      const ready = batchItems.filter(item => item.status === "ready");
+      const selected = selectedBatchItems();
+      const failed = batchItems.filter(item => item.status === "error").length;
+      const estimatedBytes = selected.reduce(
+        (total, item) => total + (Number(item.choices[item.choiceIndex].estimated_bytes) || 0),
+        0
+      );
+      const unknown = selected.filter(item => !Number(item.choices[item.choiceIndex].estimated_bytes)).length;
+      currentBatchPackages = planBatchPackages(selected);
+      const oversizedPackage = currentBatchPackages.some(batchPackage => batchPackage.estimatedBytes > batchLimitBytes);
+      batchToolbar.classList.toggle("visible", Boolean(batchItems.length));
+      batchSummary.textContent = `${selected.length} dari ${ready.length} media dipilih`;
+      batchSummaryDetail.textContent = selected.length
+        ? `Perkiraan ${prettyBytes(estimatedBytes)}${unknown ? ` + ${unknown} ukuran belum diketahui` : ""}`
+        : "Pilih media dan kualitas yang ingin diunduh.";
+      batchSelectAll.textContent = ready.length && ready.every(item => item.selected)
+        ? "Batalkan semua pilihan"
+        : "Pilih semua";
+      renderBatchPackages(currentBatchPackages);
+
+      const messages = [];
+      const largestPackageRatio = currentBatchPackages.reduce(
+        (largest, batchPackage) => Math.max(largest, batchPackage.estimatedBytes / batchLimitBytes),
+        0
+      );
+      if (selected.length > batchWarningItems) messages.push(`${selected.length} media akan diproses secara bertahap.`);
+      if (largestPackageRatio >= .6) messages.push(`Paket terbesar memakai sekitar ${Math.round(largestPackageRatio * 100)}% batas penyimpanan aman.`);
+      if (currentBatchPackages.length > 1) messages.push(`Pilihan dibagi menjadi ${currentBatchPackages.length} paket ZIP agar tetap di bawah batas penyimpanan.`);
+      if (unknown) messages.push(`${unknown} media belum melaporkan ukuran; batas aktual tetap diperiksa saat mengunduh.`);
+      if (failed) messages.push(`${failed} link gagal dianalisis dan tidak akan menghentikan media lainnya.`);
+      if (oversizedPackage) messages.push("Ada paket yang melewati batas aman. Kurangi kualitas atau pilihan media.");
+      showBatchMessage(messages.join(" "), oversizedPackage);
+    }
+
+    function renderBatchItems() {
+      batchList.replaceChildren();
+      batchItems.forEach((item, index) => {
+        const card = document.createElement("article");
+        card.className = `batch-item ${item.status}`;
+        card.innerHTML = "<input class=\"batch-check\" type=\"checkbox\"><img class=\"batch-thumb\" alt=\"\"><div class=\"batch-item-body\"><p class=\"batch-item-title\"></p><p class=\"batch-item-meta\"></p><select class=\"batch-choice\"></select></div>";
+        const checkbox = card.querySelector(".batch-check");
+        const thumbnail = card.querySelector(".batch-thumb");
+        const title = card.querySelector(".batch-item-title");
+        const meta = card.querySelector(".batch-item-meta");
+        const select = card.querySelector(".batch-choice");
+        checkbox.setAttribute("aria-label", `Pilih media ${index + 1}`);
+        checkbox.checked = Boolean(item.selected);
+        checkbox.disabled = item.status !== "ready";
+        thumbnail.src = item.data?.thumbnail || "/static/icon.svg";
+        title.textContent = item.data?.title || item.url;
+        meta.textContent = item.status === "error"
+          ? item.error
+          : item.status === "ready"
+            ? `${item.data.platform || "Media"} · siap dipilih`
+            : item.status === "analyzing" ? "Sedang menganalisis…" : "Menunggu…";
+        select.hidden = item.status !== "ready";
+        item.choices.forEach((choice, choiceIndex) => {
+          const option = document.createElement("option");
+          option.value = String(choiceIndex);
+          option.textContent = `${choice.display} · ${choice.detail}`;
+          option.selected = choiceIndex === item.choiceIndex;
+          select.appendChild(option);
+        });
+        checkbox.addEventListener("change", () => {
+          item.selected = checkbox.checked;
+          updateBatchSummary();
+        });
+        select.addEventListener("change", () => {
+          item.choiceIndex = Number(select.value);
+          updateBatchSummary();
+        });
+        batchList.appendChild(card);
+      });
+      updateBatchSummary();
+    }
+
+    async function analyzeBatchChunk(urls) {
+      const items = urls.map(url => ({
+        url,
+        status: "pending",
+        data: null,
+        error: "",
+        choices: [],
+        choiceIndex: -1,
+        selected: false
+      }));
+      batchItems.push(...items);
+      renderBatchItems();
+      batchAnalyzeButton.disabled = true;
+      batchAnalyzeButton.textContent = "Menganalisis…";
+      let cursor = 0;
+
+      async function worker() {
+        while (cursor < items.length) {
+          const item = items[cursor++];
+          item.status = "analyzing";
+          renderBatchItems();
+          try {
+            const response = await fetch("/api/info", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ url: item.url })
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || "Link tidak dapat diproses.");
+            item.data = data;
+            item.choices = choicesForMedia(data);
+            item.choiceIndex = defaultBatchChoice(item.choices);
+            if (item.choiceIndex < 0) throw new Error("Tidak ada format yang dapat diunduh.");
+            item.selected = true;
+            item.status = "ready";
+          } catch (error) {
+            item.status = "error";
+            item.error = error.message || "Link tidak dapat diproses.";
+          }
+          renderBatchItems();
+        }
+      }
+
+      await Promise.all([worker(), worker()]);
+      batchAnalyzeButton.disabled = false;
+      batchAnalyzeButton.textContent = "Analisis semua";
+      batchContinue.hidden = !pendingBatchUrls.length;
+      if (pendingBatchUrls.length) {
+        batchContinue.textContent = `Analisis ${Math.min(maxBatchItems, pendingBatchUrls.length)} link berikutnya`;
+      }
+      renderBatchItems();
+    }
+
+    async function analyzeBatch(event) {
+      event.preventDefault();
+      const urls = parseBatchUrls(batchInput.value);
+      if (!urls.length) {
+        showBatchMessage("Masukkan setidaknya satu link HTTP/HTTPS yang valid.", true);
+        return;
+      }
+      batchItems = [];
+      pendingBatchUrls = urls.slice(maxBatchItems);
+      batchContinue.hidden = true;
+      disposePreparedDownload();
+      downloadProgress.classList.remove("visible", "error");
+      await analyzeBatchChunk(urls.slice(0, maxBatchItems));
+    }
+
+    async function startBatchPackage(batchPackage, packageNumber, button) {
+      if (preparedDownload && !preparedDownload.saved) {
+        showBatchMessage("Simpan paket yang sudah siap sebelum menyiapkan paket berikutnya.", true);
+        return;
+      }
+      const tokens = batchPackage.items.map(item => item.choices[item.choiceIndex].token);
+      await startDownload(
+        { label: `paket ${packageNumber}` },
+        {
+          url: "/api/batch/download?progress=1",
+          options: {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tokens, package: packageNumber })
+          },
+          onPrepared: () => {
+            button.textContent = "Paket siap disimpan";
+            button.disabled = true;
+          }
+        }
+      );
+    }
+
     async function analyze(event) {
       event.preventDefault();
       clearError();
@@ -1064,6 +1575,9 @@
     }
 
     form.addEventListener("submit", analyze);
+    batchForm.addEventListener("submit", analyzeBatch);
+    singleModeButton.addEventListener("click", () => setMode("single"));
+    batchModeButton.addEventListener("click", () => setMode("batch"));
     document.querySelectorAll(".tab").forEach(tab => {
       tab.addEventListener("click", () => renderChoices(tab.dataset.kind));
     });
@@ -1071,12 +1585,40 @@
     saveDownload.addEventListener("click", savePreparedDownload);
     pasteButton.addEventListener("click", async () => {
       try {
-        input.value = await navigator.clipboard.readText();
-        input.focus();
+        const clipboard = await navigator.clipboard.readText();
+        const urls = parseBatchUrls(clipboard);
+        if (urls.length > 1) {
+          batchInput.value = clipboard;
+          setMode("batch");
+          showBatchMessage(`${urls.length} link terdeteksi. Periksa daftar lalu tekan “Analisis semua”.`);
+        } else {
+          input.value = clipboard.trim();
+          input.focus();
+        }
       } catch {
         input.focus();
         showError("Browser tidak memberi izin membaca clipboard. Tempel link secara manual.");
       }
+    });
+    batchPasteButton.addEventListener("click", async () => {
+      try {
+        batchInput.value = await navigator.clipboard.readText();
+        batchInput.focus();
+      } catch {
+        batchInput.focus();
+        showBatchMessage("Browser tidak memberi izin membaca clipboard. Tempel link secara manual.", true);
+      }
+    });
+    batchSelectAll.addEventListener("click", () => {
+      const ready = batchItems.filter(item => item.status === "ready");
+      const select = !ready.every(item => item.selected);
+      ready.forEach(item => { item.selected = select; });
+      renderBatchItems();
+    });
+    batchContinue.addEventListener("click", async () => {
+      const nextUrls = pendingBatchUrls.splice(0, maxBatchItems);
+      batchContinue.hidden = true;
+      await analyzeBatchChunk(nextUrls);
     });
   </script>
 </body>

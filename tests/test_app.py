@@ -1,8 +1,11 @@
+import io
 import json
 import struct
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import app as media_app
@@ -41,6 +44,18 @@ SAMPLE_INFO = {
         },
     ],
 }
+
+
+def parse_progress_frames(body):
+    frames = []
+    offset = 0
+    while offset < len(body):
+        frame_type, frame_length = struct.unpack(">cI", body[offset:offset + 5])
+        offset += 5
+        payload = body[offset:offset + frame_length]
+        offset += frame_length
+        frames.append((frame_type, payload))
+    return frames
 
 
 class AppTests(unittest.TestCase):
@@ -176,6 +191,8 @@ class AppTests(unittest.TestCase):
         self.assertEqual(payload["choices"]["audio"][0]["label"], "Audio sumber · 128 kbps")
         self.assertEqual(payload["choices"]["audio"][0]["detail"], "AAC / M4A · tanpa konversi · sekitar 1.9 MB")
         self.assertTrue(payload["choices"]["video"][0]["download_url"].startswith("/api/download/"))
+        self.assertTrue(payload["choices"]["video"][0]["token"])
+        self.assertEqual(payload["choices"]["video"][0]["estimated_bytes"], 4_000_000)
 
     def test_video_size_uses_bitrate_when_filesize_is_missing(self):
         formats = [
@@ -286,21 +303,69 @@ class AppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.mimetype, media_app.PROGRESS_MIME)
 
-        frames = []
-        body = response.data
-        offset = 0
-        while offset < len(body):
-            frame_type, frame_length = struct.unpack(">cI", body[offset:offset + 5])
-            offset += 5
-            payload = body[offset:offset + frame_length]
-            offset += frame_length
-            frames.append((frame_type, payload))
+        frames = parse_progress_frames(response.data)
 
         self.assertEqual([frame[0] for frame in frames], [b"P", b"P", b"M", b"D", b"C"])
         metadata = json.loads(frames[2][1])
         self.assertEqual(metadata["filename"], "sample.mp4")
         self.assertEqual(metadata["size"], len(b"media-bytes"))
         self.assertEqual(frames[3][1], b"media-bytes")
+
+    @patch("app.shutil.disk_usage", return_value=SimpleNamespace(free=1_000_000_000))
+    def test_batch_storage_limit_reserves_temporary_space(self, _disk_usage):
+        self.assertEqual(media_app._batch_storage_limit(), 400_000_000)
+
+    def test_batch_endpoint_rejects_more_than_thirty_items(self):
+        response = self.client.post("/api/batch/download", json={
+            "tokens": ["token"] * (media_app.MAX_BATCH_ITEMS + 1),
+        })
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("maksimal", response.get_json()["error"].lower())
+
+    def test_batch_endpoint_rejects_tampered_token(self):
+        response = self.client.post("/api/batch/download", json={"tokens": ["invalid-token"]})
+
+        self.assertEqual(response.status_code, 400)
+
+    @patch("app._validate_public_url", side_effect=lambda url: url)
+    @patch("app._download_video_or_audio")
+    def test_batch_download_keeps_successful_items_when_one_fails(self, download_mock, _validate):
+        def make_result(payload, folder, progress, _cancelled):
+            if payload["url"].endswith("failed"):
+                raise media_app.UserFacingError("Sumber menolak akses.")
+            progress({"percent": 50, "phase": "Mengunduh media", "detail": "1 MB/s"})
+            result = folder / "sample.mp4"
+            result.write_bytes(b"media-bytes")
+            return result
+
+        download_mock.side_effect = make_result
+        tokens = [
+            media_app._make_token(
+                "https://example.com/success",
+                "video",
+                height=720,
+                estimated_bytes=100,
+            ),
+            media_app._make_token(
+                "https://example.com/failed",
+                "video",
+                height=720,
+                estimated_bytes=100,
+            ),
+        ]
+        response = self.client.post("/api/batch/download", json={"tokens": tokens, "package": 2})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, media_app.PROGRESS_MIME)
+        frames = parse_progress_frames(response.data)
+        self.assertEqual(download_mock.call_args_list[0].args[0]["height"], 720)
+        metadata = json.loads(next(payload for kind, payload in frames if kind == b"M"))
+        archive_bytes = b"".join(payload for kind, payload in frames if kind == b"D")
+        self.assertEqual(metadata["filename"], "linkdrop-" + media_app.time.strftime("%Y-%m-%d") + "-part-2.zip")
+        with zipfile.ZipFile(io.BytesIO(archive_bytes)) as bundle:
+            self.assertEqual(set(bundle.namelist()), {"sample.mp4", "linkdrop-report.txt"})
+            self.assertIn("Media 2", bundle.read("linkdrop-report.txt").decode("utf-8"))
 
     def test_youtube_reload_error_is_actionable(self):
         message = media_app._friendly_error(Exception("The page needs to be reloaded."))

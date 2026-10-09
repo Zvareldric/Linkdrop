@@ -18,6 +18,8 @@ Linkdrop is a responsive web application for inspecting and downloading public m
 - Converts incompatible MP4 streams to H.264/AAC while preserving the selected resolution.
 - Supports source audio and MP3 output at 128, 192, or 320 kbps.
 - Preserves original photos and packages multi-image posts as ZIP files.
+- Keeps single-link downloads as the default and offers an optional multi-link queue with per-item selection.
+- Splits large selections into storage-aware ZIP packages and continues when individual items fail.
 - Displays live download, processing, and transfer progress with cancellation support.
 - Uses an explicit save action that works with desktop pickers, mobile share sheets, and browser downloads.
 - Uses signed, expiring download tokens and blocks private-network URLs.
@@ -30,11 +32,17 @@ Linkdrop is a responsive web application for inspecting and downloading public m
 Browser
   ├── POST /api/info
   │     └── validate URL → inspect metadata → return signed choices
-  └── GET /api/download/<token>?progress=1
-        └── download → merge/transcode → stream file → clean temporary data
+  ├── GET /api/download/<token>?progress=1
+  │     └── download → merge/transcode → stream file → clean temporary data
+  └── POST /api/batch/download?progress=1
+        └── validate choices → process sequentially → package ZIP → clean temporary data
 ```
 
-The download protocol carries progress events and file bytes in one HTTP response. This avoids relying on background threads, in-memory job registries, or a persistent local filesystem.
+The download protocol carries progress events and file bytes in one HTTP response. Each short-lived worker remains bound to that response, without a persistent job registry or permanent output storage.
+
+### Multiple links
+
+`Single link` remains the default mode. Select `Multiple links` to paste one public URL per line, analyze at most two URLs concurrently, choose the output for each item, and download only the checked items as ZIP. More than 10 selections show a warning; packages contain at most 30 media and are split at 80% of the safe temporary-storage limit. Package downloads remain sequential so the next ZIP does not replace an unsaved file.
 
 ## Requirements
 
@@ -164,6 +172,7 @@ Linkdrop/
 | `GET` | `/api/health` | Runtime and FFmpeg health check |
 | `POST` | `/api/info` | Validate a public URL and return available formats |
 | `GET` | `/api/download/<token>` | Prepare and stream the selected output |
+| `POST` | `/api/batch/download` | Process signed selections sequentially and stream a ZIP package |
 
 Add `?progress=1` to the download endpoint to use Linkdrop's framed progress stream.
 

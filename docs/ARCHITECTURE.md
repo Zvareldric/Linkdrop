@@ -42,11 +42,21 @@ Flask API ─── yt-dlp ─── FFmpeg
 
 When `progress=1` is present, progress frames, metadata, data chunks, and completion status travel in the same response. This keeps the operation bound to one application instance.
 
+### Multi-link package
+
+1. The browser reuses `POST /api/info` with at most two concurrent analyses.
+2. The user explicitly selects the items and output choices to include.
+3. The browser groups signed choices at 80% of the safe package limit and sends at most 30 tokens to `POST /api/batch/download`.
+4. The server validates every token before processing starts, then downloads each item sequentially with the existing media pipeline.
+5. Successful files are stored without recompression in a ZIP; individual failures are written to `linkdrop-report.txt` without stopping other items.
+6. Available disk space is divided by 2.5 and capped by `MAX_MEDIA_BYTES` to reserve room for source, conversion, and archive files.
+7. Each ZIP is streamed with the same framed progress protocol and all temporary data is removed afterward.
+
 ## Design decisions
 
 ### Stateless requests
 
-Linkdrop does not store jobs in process memory and does not depend on daemon threads. This makes restarts safer and avoids routing problems when multiple instances serve the application.
+Linkdrop does not keep a persistent job registry. A short-lived worker thread is scoped to each active progress response, so the browser connection remains the owner of the work and cancellation can clean its temporary directory.
 
 ### Temporary storage
 

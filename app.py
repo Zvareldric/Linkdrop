@@ -38,6 +38,9 @@ TOKEN_MAX_AGE = int(os.environ.get("DOWNLOAD_TOKEN_MAX_AGE", 15 * 60))
 HTTP_TIMEOUT = int(os.environ.get("HTTP_TIMEOUT", 30))
 CHUNK_SIZE = 1024 * 1024
 PROGRESS_MIME = "application/vnd.linkdrop.progress"
+MAX_BATCH_ITEMS = 30
+BATCH_WARNING_ITEMS = 10
+BATCH_DISK_FACTOR = 2.5
 
 WORK_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -535,6 +538,8 @@ def _choice(url: str, kind: str, label: str, detail: str, **options) -> dict:
         "id": f"{kind}:{options.get('height') or options.get('codec') or options.get('bitrate') or 'original'}",
         "label": label,
         "detail": detail,
+        "estimated_bytes": options.get("estimated_bytes"),
+        "token": token,
         "download_url": f"/api/download/{token}",
     }
 
@@ -562,13 +567,22 @@ def _build_choices(url: str, info: dict) -> dict:
 
     video_choices = []
     for height in heights:
-        size = _pretty_bytes(_estimated_video_size(formats, height, info.get("duration")))
+        estimated_bytes = _estimated_video_size(formats, height, info.get("duration"))
+        size = _pretty_bytes(estimated_bytes)
         detail = "MP4" + (f" · sekitar {size}" if size else " · ukuran dihitung saat mengunduh")
-        video_choices.append(_choice(url, "video", f"{height}p", detail, height=height))
+        video_choices.append(_choice(
+            url,
+            "video",
+            f"{height}p",
+            detail,
+            height=height,
+            estimated_bytes=estimated_bytes,
+        ))
 
     source_audio = _best_audio_format(formats)
     source_bitrate = round(source_audio.get("abr") or source_audio.get("tbr") or 0) if source_audio else 0
-    source_size = _pretty_bytes(_format_size(source_audio, info.get("duration"))) if source_audio else None
+    source_size_bytes = _format_size(source_audio, info.get("duration")) if source_audio else None
+    source_size = _pretty_bytes(source_size_bytes)
     source_codec = str(source_audio.get("acodec") or "").lower() if source_audio else ""
     source_format = "AAC / M4A" if source_codec.startswith(("aac", "mp4a")) else "Opus / WebM"
     source_label = "Audio sumber" + (f" · {source_bitrate} kbps" if source_bitrate else "")
@@ -581,10 +595,41 @@ def _build_choices(url: str, info: dict) -> dict:
         return f"MP3 · {bitrate} kbps" + (f" · sekitar {size}" if size else "")
 
     audio_choices = [
-        _choice(url, "audio", source_label, source_detail, codec="source"),
-        _choice(url, "audio", "MP3 128 kbps", mp3_detail(128), codec="mp3", bitrate=128),
-        _choice(url, "audio", "MP3 192 kbps", mp3_detail(192), codec="mp3", bitrate=192),
-        _choice(url, "audio", "MP3 320 kbps", mp3_detail(320), codec="mp3", bitrate=320),
+        _choice(
+            url,
+            "audio",
+            source_label,
+            source_detail,
+            codec="source",
+            estimated_bytes=source_size_bytes,
+        ),
+        _choice(
+            url,
+            "audio",
+            "MP3 128 kbps",
+            mp3_detail(128),
+            codec="mp3",
+            bitrate=128,
+            estimated_bytes=int(128 * 1000 * info["duration"] / 8) if info.get("duration") else None,
+        ),
+        _choice(
+            url,
+            "audio",
+            "MP3 192 kbps",
+            mp3_detail(192),
+            codec="mp3",
+            bitrate=192,
+            estimated_bytes=int(192 * 1000 * info["duration"] / 8) if info.get("duration") else None,
+        ),
+        _choice(
+            url,
+            "audio",
+            "MP3 320 kbps",
+            mp3_detail(320),
+            codec="mp3",
+            bitrate=320,
+            estimated_bytes=int(320 * 1000 * info["duration"] / 8) if info.get("duration") else None,
+        ),
     ] if source_audio else []
 
     return {"video": video_choices, "audio": audio_choices, "photo": []}
@@ -974,6 +1019,118 @@ def _download_gallery(
     return archive
 
 
+def _download_payload(
+    payload: dict,
+    folder: Path,
+    progress=None,
+    cancelled: threading.Event | None = None,
+) -> Path:
+    if payload["kind"] == "gallery":
+        return _download_gallery(payload, folder, progress, cancelled)
+    return _download_video_or_audio(payload, folder, progress, cancelled)
+
+
+def _batch_storage_limit() -> int:
+    free_bytes = shutil.disk_usage(WORK_DIR).free
+    return min(MAX_MEDIA_BYTES, int(free_bytes / BATCH_DISK_FACTOR))
+
+
+def _unique_archive_name(filename: str, used_names: set[str]) -> str:
+    safe_name = secure_filename(filename) or "media"
+    candidate = safe_name
+    stem = Path(safe_name).stem
+    suffix = Path(safe_name).suffix
+    counter = 2
+    while candidate.lower() in used_names:
+        candidate = f"{stem}-{counter}{suffix}"
+        counter += 1
+    used_names.add(candidate.lower())
+    return candidate
+
+
+def _download_batch(
+    payloads: list[dict],
+    folder: Path,
+    package_number: int,
+    progress=None,
+    cancelled: threading.Event | None = None,
+) -> Path:
+    if not payloads or len(payloads) > MAX_BATCH_ITEMS:
+        raise UserFacingError(f"Satu paket harus berisi 1–{MAX_BATCH_ITEMS} media.")
+
+    storage_limit = _batch_storage_limit()
+    if storage_limit < 32 * 1024 * 1024:
+        raise UserFacingError("Ruang penyimpanan sementara tidak mencukupi untuk membuat paket.")
+
+    estimated_total = sum(int(item.get("estimated_bytes") or 0) for item in payloads)
+    if estimated_total > storage_limit:
+        raise UserFacingError("Perkiraan ukuran paket melewati batas penyimpanan. Bagi pilihan menjadi paket yang lebih kecil.")
+
+    archive = folder / f"linkdrop-{time.strftime('%Y-%m-%d')}-part-{package_number}.zip"
+    used_names = set()
+    failures = []
+    completed = 0
+    archived_bytes = 0
+
+    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_STORED, allowZip64=True) as bundle:
+        for index, payload in enumerate(payloads, start=1):
+            if cancelled and cancelled.is_set():
+                raise UserFacingError("Unduhan dibatalkan.")
+            item_folder = folder / f"item-{index:02d}"
+            item_folder.mkdir()
+
+            def item_progress(event, item=index):
+                if not progress:
+                    return
+                item_percent = max(0, min(float(event.get("percent") or 0), 100))
+                overall = ((item - 1) + item_percent / 100) / len(payloads) * 88
+                progress({
+                    "percent": round(overall, 1),
+                    "item_index": item,
+                    "item_count": len(payloads),
+                    "item_percent": round(item_percent, 1),
+                    "phase": f"{event.get('phase') or 'Memproses media'} · {item}/{len(payloads)}",
+                    "detail": event.get("detail") or "",
+                })
+
+            try:
+                result = _download_payload(payload, item_folder, item_progress, cancelled)
+                result_size = result.stat().st_size
+                if archived_bytes + result_size > storage_limit:
+                    raise UserFacingError("Ukuran aktual media melewati sisa kapasitas paket.")
+                bundle.write(result, arcname=_unique_archive_name(result.name, used_names))
+                archived_bytes += result_size
+                completed += 1
+            except OSError:
+                raise
+            except Exception as exc:
+                if cancelled and cancelled.is_set():
+                    raise
+                failures.append(f"Media {index}: {_friendly_error(exc)}")
+            finally:
+                shutil.rmtree(item_folder, ignore_errors=True)
+
+        if failures:
+            bundle.writestr(
+                "linkdrop-report.txt",
+                "Beberapa media tidak dapat diproses:\n\n" + "\n".join(failures),
+            )
+
+    if not completed:
+        archive.unlink(missing_ok=True)
+        raise UserFacingError("Tidak ada media yang berhasil diproses dalam paket ini.")
+    if archive.stat().st_size > storage_limit:
+        archive.unlink(missing_ok=True)
+        raise UserFacingError("Ukuran aktual paket melewati batas penyimpanan.")
+    if progress:
+        progress({
+            "percent": 92,
+            "phase": "Paket ZIP siap",
+            "detail": f"{completed} media berhasil" + (f" · {len(failures)} gagal" if failures else ""),
+        })
+    return archive
+
+
 def _progress_frame(kind: bytes, payload=b"") -> bytes:
     if isinstance(payload, dict):
         payload = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -982,7 +1139,11 @@ def _progress_frame(kind: bytes, payload=b"") -> bytes:
     return struct.pack(">cI", kind, len(payload)) + payload
 
 
-def _stream_progress_download(payload: dict) -> Response:
+def _stream_progress_download(
+    payload: dict | None = None,
+    batch_payloads: list[dict] | None = None,
+    package_number: int = 1,
+) -> Response:
     """Keep one request open while streaming progress events and the final file."""
 
     cleanup_folder = Path(tempfile.mkdtemp(prefix="linkdrop-", dir=WORK_DIR))
@@ -997,10 +1158,10 @@ def _stream_progress_download(payload: dict) -> Response:
     def worker():
         try:
             report({"percent": 0, "phase": "Memulai unduhan", "detail": "Menghubungi platform sumber…"})
-            if payload["kind"] == "gallery":
-                result = _download_gallery(payload, cleanup_folder, report, cancelled)
+            if batch_payloads is not None:
+                result = _download_batch(batch_payloads, cleanup_folder, package_number, report, cancelled)
             else:
-                result = _download_video_or_audio(payload, cleanup_folder, report, cancelled)
+                result = _download_payload(payload, cleanup_folder, report, cancelled)
             events.put(("file", result))
         except Exception as exc:
             app.logger.warning("Media progress download failed: %s", exc)
@@ -1074,6 +1235,14 @@ def _stream_file(path: Path, cleanup_folder: Path) -> Response:
     return response
 
 
+def _decode_download_token(token: str) -> dict:
+    payload = _signer.loads(token, max_age=TOKEN_MAX_AGE)
+    payload["url"] = _validate_public_url(payload.get("url", ""))
+    if payload.get("kind") not in {"video", "audio", "gallery"}:
+        raise UserFacingError("Jenis unduhan tidak valid.")
+    return payload
+
+
 @app.after_request
 def _security_headers(response):
     response.headers.setdefault("Referrer-Policy", "no-referrer")
@@ -1090,7 +1259,13 @@ def _security_headers(response):
 
 @app.get("/")
 def index():
-    return render_template("index.html", max_file_mb=MAX_MEDIA_BYTES // (1024 * 1024))
+    return render_template(
+        "index.html",
+        max_file_mb=MAX_MEDIA_BYTES // (1024 * 1024),
+        batch_limit_bytes=_batch_storage_limit(),
+        batch_warning_items=BATCH_WARNING_ITEMS,
+        max_batch_items=MAX_BATCH_ITEMS,
+    )
 
 
 @app.get("/api/health")
@@ -1102,6 +1277,8 @@ def health():
         "ffmpeg": bool(shutil.which("ffmpeg")),
         "js_runtime": next(iter(js_runtimes), None),
         "max_file_mb": MAX_MEDIA_BYTES // (1024 * 1024),
+        "batch_limit_mb": _batch_storage_limit() // (1024 * 1024),
+        "max_batch_items": MAX_BATCH_ITEMS,
     })
 
 
@@ -1119,10 +1296,7 @@ def media_info():
 @app.get("/api/download/<token>")
 def download(token: str):
     try:
-        payload = _signer.loads(token, max_age=TOKEN_MAX_AGE)
-        payload["url"] = _validate_public_url(payload.get("url", ""))
-        if payload.get("kind") not in {"video", "audio", "gallery"}:
-            raise UserFacingError("Jenis unduhan tidak valid.")
+        payload = _decode_download_token(token)
     except SignatureExpired:
         return jsonify({"error": "Link unduhan kedaluwarsa. Analisis link kembali."}), 410
     except BadSignature:
@@ -1144,6 +1318,31 @@ def download(token: str):
         shutil.rmtree(cleanup_folder, ignore_errors=True)
         app.logger.warning("Media download failed: %s", exc)
         return jsonify({"error": _friendly_error(exc)}), 422
+
+
+@app.post("/api/batch/download")
+def batch_download():
+    try:
+        body = _json_body()
+        tokens = body.get("tokens")
+        if not isinstance(tokens, list) or not tokens:
+            raise UserFacingError("Pilih setidaknya satu media untuk diunduh.")
+        if len(tokens) > MAX_BATCH_ITEMS:
+            raise UserFacingError(f"Satu paket maksimal berisi {MAX_BATCH_ITEMS} media.")
+        if any(not isinstance(token, str) or len(token) > 8192 for token in tokens):
+            raise UserFacingError("Pilihan media tidak valid.")
+        package_number = int(body.get("package") or 1)
+        if package_number < 1 or package_number > 999:
+            raise UserFacingError("Nomor paket tidak valid.")
+        payloads = [_decode_download_token(token) for token in tokens]
+    except SignatureExpired:
+        return jsonify({"error": "Pilihan unduhan kedaluwarsa. Analisis link kembali."}), 410
+    except BadSignature:
+        return jsonify({"error": "Pilihan unduhan tidak valid."}), 400
+    except Exception as exc:
+        return jsonify({"error": _friendly_error(exc)}), 422
+
+    return _stream_progress_download(batch_payloads=payloads, package_number=package_number)
 
 
 if __name__ == "__main__":

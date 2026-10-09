@@ -18,6 +18,8 @@ Linkdrop adalah aplikasi web responsif untuk menganalisis dan mengunduh media pu
 - Mengonversi stream MP4 yang tidak kompatibel menjadi H.264/AAC tanpa mengubah resolusi pilihan.
 - Mendukung audio sumber serta MP3 128, 192, dan 320 kbps.
 - Mempertahankan foto asli dan mengemas post multi-foto menjadi ZIP.
+- Mempertahankan unduhan satu link sebagai mode utama dan menyediakan antrean multi-link opsional dengan pilihan per media.
+- Membagi pilihan besar menjadi beberapa ZIP sesuai kapasitas penyimpanan dan tetap melanjutkan ketika satu media gagal.
 - Menampilkan progres download, pemrosesan, dan transfer secara langsung serta dapat dibatalkan.
 - Menyediakan tombol simpan yang mendukung file picker desktop, menu bagikan ponsel, dan download browser.
 - Menggunakan token bertanda tangan yang kedaluwarsa dan memblokir URL jaringan privat.
@@ -30,11 +32,17 @@ Linkdrop adalah aplikasi web responsif untuk menganalisis dan mengunduh media pu
 Browser
   ├── POST /api/info
   │     └── validasi URL → baca metadata → kirim pilihan bertanda tangan
-  └── GET /api/download/<token>?progress=1
-        └── download → gabung/konversi → stream file → hapus data sementara
+  ├── GET /api/download/<token>?progress=1
+  │     └── download → gabung/konversi → stream file → hapus data sementara
+  └── POST /api/batch/download?progress=1
+        └── validasi pilihan → proses berurutan → buat ZIP → hapus data sementara
 ```
 
-Progres dan byte file dikirim melalui satu respons HTTP. Dengan cara ini, aplikasi tidak bergantung pada background thread, daftar job di memori, atau filesystem persisten.
+Progres dan byte file dikirim melalui satu respons HTTP. Setiap worker sementara tetap terikat pada respons tersebut tanpa daftar job persisten atau penyimpanan hasil permanen.
+
+### Beberapa link
+
+`Satu link` tetap menjadi mode utama. Pilih `Beberapa link` untuk menempel satu URL publik per baris, menganalisis maksimal dua URL bersamaan, menentukan output setiap media, dan hanya mengunduh media yang dicentang sebagai ZIP. Pilihan di atas 10 media menampilkan peringatan; setiap paket memuat maksimal 30 media dan dibagi pada 80% batas aman penyimpanan sementara. Paket diunduh berurutan agar ZIP berikutnya tidak menggantikan file yang belum disimpan.
 
 ## Kebutuhan sistem
 
@@ -162,6 +170,7 @@ Linkdrop/
 | `GET` | `/api/health` | Pemeriksaan runtime dan FFmpeg |
 | `POST` | `/api/info` | Validasi URL publik dan daftar format |
 | `GET` | `/api/download/<token>` | Menyiapkan dan men-stream output pilihan |
+| `POST` | `/api/batch/download` | Memproses pilihan bertanda tangan secara berurutan dan men-stream paket ZIP |
 
 Tambahkan `?progress=1` pada endpoint download untuk menggunakan progress stream Linkdrop.
 
