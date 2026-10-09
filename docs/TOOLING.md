@@ -1,6 +1,6 @@
 # Tooling dan keputusan arsitektur
 
-Repo eksternal yang dipilih pengguna dipakai sesuai fungsi aslinya, tanpa menambah dependency runtime yang tidak dibutuhkan.
+Setiap alat pengembangan dipakai sesuai fungsi aslinya tanpa menambah dependency runtime yang tidak diperlukan.
 
 ## Playwright
 
@@ -12,9 +12,9 @@ npx playwright install chromium webkit
 npm run test:e2e
 ```
 
-## Anthropic frontend-design
+## Pedoman frontend
 
-Panduan dipakai untuk merancang identitas visual yang spesifik terhadap proses transfer media, hierarki tipografi, copy yang langsung, visible focus, reduced motion, dan layout responsif. Aplikasi tidak menyalin aset atau kode dari repo tersebut.
+Antarmuka mengikuti prinsip hierarki visual yang jelas, copy yang langsung, visible focus, reduced motion, target sentuh minimal, dan layout responsif. Seluruh implementasi UI disimpan langsung di repository ini.
 
 ## Strix
 
@@ -26,10 +26,10 @@ strix --target .
 
 Jangan menjalankan autonomous pentest terhadap domain yang tidak dimiliki atau tanpa izin tertulis.
 
-## Context7
+## Referensi dokumentasi
 
-Context7 dipakai pada tahap development untuk mengambil dokumentasi library terbaru. Ia tidak dikirim ke browser dan tidak diperlukan agar Linkdrop berjalan.
+Dokumentasi library terbaru diperiksa selama development untuk mengurangi ketergantungan pada API usang. Alat referensi tersebut tidak dikirim ke browser dan tidak diperlukan saat Linkdrop berjalan.
 
 ## Supabase plugin
 
-Repo `supabase-community/supabase-plugin` berisi skill dan panduan coding-agent. Linkdrop saat ini sengaja stateless: tidak ada akun, riwayat server, atau database. Supabase baru relevan pada fase akun, rate limiting persisten, job queue, atau object storage. Menambahkannya sekarang akan menambah data pengguna dan operational surface tanpa menyelesaikan kebutuhan mobile.
+Linkdrop saat ini sengaja stateless: tidak ada akun, riwayat server, atau database. Supabase baru relevan pada fase akun, rate limiting persisten, job queue, atau object storage. Menambahkannya sekarang akan memperluas data pengguna dan beban operasional tanpa menyelesaikan kebutuhan utama aplikasi.
