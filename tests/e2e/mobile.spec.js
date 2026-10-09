@@ -112,6 +112,8 @@ test("alur analisis berakhir pada tombol simpan yang dapat mengunduh file", asyn
   await expect(page.getByRole("progressbar").getByText("File siap disimpan", { exact: true })).toBeVisible();
   const saveDialog = page.getByRole("dialog", { name: "File siap disimpan" });
   await expect(saveDialog).toBeVisible();
+  const filenameInput = saveDialog.getByLabel("Nama file");
+  await expect(filenameInput).toHaveValue("contoh.mp4");
 
   const saveBox = await saveDialog.getByRole("button", { name: "Simpan sekarang", exact: true }).boundingBox();
   expect(saveBox.height).toBeGreaterThanOrEqual(44);
@@ -122,12 +124,13 @@ test("alur analisis berakhir pada tombol simpan yang dapat mengunduh file", asyn
   await saveDialog.press("Escape");
   await expect(saveDialog).toBeHidden();
   await page.getByRole("button", { name: "Simpan ke perangkat", exact: true }).click();
+  await filenameInput.fill("hasil-pengujian");
 
   const downloadPromise = page.waitForEvent("download");
   await saveDialog.getByRole("button", { name: "Simpan sekarang", exact: true }).click();
   const download = await downloadPromise;
 
-  expect(download.suggestedFilename()).toBe("contoh.mp4");
+  expect(download.suggestedFilename()).toBe("hasil-pengujian.mp4");
 });
 
 test("kontrol mode, clipboard, format, dan pilihan batch memperbarui antarmuka", async ({ page }) => {
