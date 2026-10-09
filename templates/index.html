@@ -489,6 +489,29 @@
 
     .progress-cancel.visible { display: inline-flex; align-items: center; }
 
+    .progress-actions {
+      display: flex;
+      flex: 0 0 auto;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .progress-save {
+      display: none;
+      min-height: 38px;
+      padding: 0 14px;
+      color: #fff;
+      background: var(--signal);
+      border: 1px solid var(--signal);
+      border-radius: 9px;
+      cursor: pointer;
+      text-decoration: none;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .progress-save.visible { display: inline-flex; align-items: center; }
+
     .download-progress.error .progress-percent,
     .download-progress.error .progress-stage { color: var(--danger); }
     .download-progress.error .progress-bar { background: var(--danger); box-shadow: none; }
@@ -641,7 +664,10 @@
             <div class="progress-track"><div class="progress-bar" id="progressBar"></div></div>
             <div class="progress-foot">
               <p class="progress-detail" id="progressDetail">Jangan tutup halaman sampai file tersimpan.</p>
-              <button class="progress-cancel" id="cancelDownload" type="button">Batalkan</button>
+              <div class="progress-actions">
+                <button class="progress-cancel" id="cancelDownload" type="button">Batalkan</button>
+                <button class="progress-save" id="saveDownload" type="button">Simpan ke perangkat</button>
+              </div>
             </div>
           </div>
         </div>
@@ -672,10 +698,13 @@
     const progressBar = document.getElementById("progressBar");
     const progressDetail = document.getElementById("progressDetail");
     const cancelDownload = document.getElementById("cancelDownload");
+    const saveDownload = document.getElementById("saveDownload");
     let mediaData = null;
     let activeKind = "video";
     let downloadActive = false;
     let activeDownloadController = null;
+    let preparedDownload = null;
+    let preparedCleanupTimer = null;
 
     function showError(message) {
       errorBox.textContent = message;
@@ -735,6 +764,96 @@
       return JSON.parse(new TextDecoder().decode(bytes));
     }
 
+    function disposePreparedDownload() {
+      if (preparedCleanupTimer) {
+        window.clearTimeout(preparedCleanupTimer);
+        preparedCleanupTimer = null;
+      }
+      if (preparedDownload) {
+        URL.revokeObjectURL(preparedDownload.objectUrl);
+        preparedDownload.cleanup();
+        preparedDownload = null;
+      }
+      saveDownload.classList.remove("visible");
+    }
+
+    function prepareDownloadForSaving(savedFile, metadata) {
+      disposePreparedDownload();
+      const objectUrl = URL.createObjectURL(savedFile.blob);
+      preparedDownload = {
+        blob: savedFile.blob,
+        objectUrl,
+        filename: metadata.filename || "download",
+        cleanup: savedFile.cleanup
+      };
+      saveDownload.classList.add("visible");
+    }
+
+    function schedulePreparedDownloadCleanup(currentDownload) {
+      if (preparedCleanupTimer) window.clearTimeout(preparedCleanupTimer);
+      preparedCleanupTimer = window.setTimeout(() => {
+        if (preparedDownload === currentDownload) disposePreparedDownload();
+      }, 10 * 60 * 1000);
+    }
+
+    async function savePreparedDownload() {
+      if (!preparedDownload) return;
+      const currentDownload = preparedDownload;
+      const fileType = currentDownload.blob.type || "application/octet-stream";
+
+      if (typeof window.showSaveFilePicker === "function") {
+        try {
+          const handle = await window.showSaveFilePicker({
+            suggestedName: currentDownload.filename,
+            types: [{
+              description: "File media",
+              accept: { [fileType]: [`.${currentDownload.filename.split(".").pop() || "bin"}`] }
+            }]
+          });
+          const writable = await handle.createWritable();
+          await currentDownload.blob.stream().pipeTo(writable);
+          updateDownloadProgress(100, "File tersimpan", `${currentDownload.filename} berhasil disimpan ke perangkat.`);
+          schedulePreparedDownloadCleanup(currentDownload);
+          return;
+        } catch (error) {
+          if (error.name === "AbortError") {
+            updateDownloadProgress(100, "File siap disimpan", "Penyimpanan dibatalkan. Tekan tombol simpan untuk mencoba lagi.");
+            return;
+          }
+        }
+      }
+
+      const sharedFile = new File([currentDownload.blob], currentDownload.filename, { type: fileType });
+      if (typeof navigator.share === "function" && navigator.canShare?.({ files: [sharedFile] })) {
+        try {
+          await navigator.share({ files: [sharedFile], title: currentDownload.filename });
+          updateDownloadProgress(100, "Menu simpan dibuka", "Pilih “Simpan ke File” untuk menyelesaikan penyimpanan.");
+          schedulePreparedDownloadCleanup(currentDownload);
+          return;
+        } catch (error) {
+          if (error.name === "AbortError") {
+            updateDownloadProgress(100, "File siap disimpan", "Menu ditutup. Tekan tombol simpan untuk mencoba lagi.");
+            return;
+          }
+        }
+      }
+
+      const fallbackLink = document.createElement("a");
+      fallbackLink.href = currentDownload.objectUrl;
+      fallbackLink.download = currentDownload.filename;
+      fallbackLink.target = "_blank";
+      fallbackLink.rel = "noopener";
+      document.body.appendChild(fallbackLink);
+      fallbackLink.click();
+      fallbackLink.remove();
+      updateDownloadProgress(
+        100,
+        "Penyimpanan dimulai",
+        "Jika pratinjau terbuka, gunakan menu Bagikan lalu pilih “Simpan ke File”."
+      );
+      schedulePreparedDownloadCleanup(currentDownload);
+    }
+
     async function createDownloadSink(metadata) {
       if (navigator.storage?.getDirectory) {
         try {
@@ -778,6 +897,7 @@
 
     async function startDownload(choice) {
       if (downloadActive) return;
+      disposePreparedDownload();
       downloadActive = true;
       activeDownloadController = new AbortController();
       clearError();
@@ -859,18 +979,12 @@
         if (!completed || !metadata) throw new Error("Koneksi terputus sebelum unduhan selesai.");
         const savedFile = await downloadSink.finish();
         downloadSink = null;
-        const objectUrl = URL.createObjectURL(savedFile.blob);
-        const saveLink = document.createElement("a");
-        saveLink.href = objectUrl;
-        saveLink.download = metadata.filename || "download";
-        document.body.appendChild(saveLink);
-        saveLink.click();
-        saveLink.remove();
-        window.setTimeout(() => {
-          URL.revokeObjectURL(objectUrl);
-          savedFile.cleanup();
-        }, 60000);
-        updateDownloadProgress(100, "Unduhan selesai", `${metadata.filename} sudah dikirim ke browser.`);
+        prepareDownloadForSaving(savedFile, metadata);
+        updateDownloadProgress(
+          100,
+          "File siap disimpan",
+          `Tekan “Simpan ke perangkat” untuk menyimpan ${metadata.filename}.`
+        );
       } catch (error) {
         if (downloadSink) await downloadSink.discard();
         const wasCancelled = error.name === "AbortError";
@@ -912,6 +1026,7 @@
 
     function renderResult(data) {
       mediaData = data;
+      disposePreparedDownload();
       downloadProgress.classList.remove("visible", "error");
       const thumbnail = document.getElementById("thumbnail");
       thumbnail.src = data.thumbnail || "";
@@ -962,6 +1077,7 @@
       tab.addEventListener("click", () => renderChoices(tab.dataset.kind));
     });
     cancelDownload.addEventListener("click", () => activeDownloadController?.abort());
+    saveDownload.addEventListener("click", savePreparedDownload);
     pasteButton.addEventListener("click", async () => {
       try {
         input.value = await navigator.clipboard.readText();

@@ -30,6 +30,11 @@ function frame(type, payload = Buffer.alloc(0)) {
 }
 
 test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "showSaveFilePicker", { value: undefined, configurable: true });
+    Object.defineProperty(navigator, "share", { value: undefined, configurable: true });
+    Object.defineProperty(navigator, "canShare", { value: undefined, configurable: true });
+  });
   await page.goto("/");
 });
 
@@ -48,7 +53,7 @@ test("halaman tetap utuh pada viewport ponsel", async ({ page }) => {
   }
 });
 
-test("alur analisis dan progres unduhan berakhir pada 100 persen", async ({ page }) => {
+test("alur analisis berakhir pada tombol simpan yang dapat mengunduh file", async ({ page }) => {
   await page.route("**/api/info", route => route.fulfill({
     status: 200,
     contentType: "application/json",
@@ -72,11 +77,14 @@ test("alur analisis dan progres unduhan berakhir pada 100 persen", async ({ page
   await page.getByRole("button", { name: "Analisis link" }).click();
   await expect(page.getByText("Contoh media untuk pengujian")).toBeVisible();
 
-  const downloadPromise = page.waitForEvent("download");
   await page.getByRole("link", { name: /720p/ }).click();
-  const download = await downloadPromise;
 
   await expect(page.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "100");
-  await expect(page.getByText("Unduhan selesai", { exact: true })).toBeVisible();
+  await expect(page.getByText("File siap disimpan", { exact: true })).toBeVisible();
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Simpan ke perangkat", exact: true }).click();
+  const download = await downloadPromise;
+
   expect(download.suggestedFilename()).toBe("contoh.mp4");
 });

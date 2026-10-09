@@ -35,9 +35,10 @@ Flask API ─── yt-dlp ─── FFmpeg
 1. `GET /api/download/<token>` validates the token and source URL again.
 2. A unique temporary working directory is created.
 3. yt-dlp downloads the selected source streams.
-4. FFmpeg merges or transcodes only when the selected output requires it.
-5. The result is streamed as an attachment.
-6. Temporary files are deleted after completion, cancellation, or failure.
+4. FFmpeg merges the selected streams and validates MP4 codec compatibility.
+5. VP9, AV1, unsupported pixel formats, and non-AAC audio are converted to H.264/AAC when required for broad device playback.
+6. The result is streamed to browser-managed temporary storage and exposed through an explicit save action.
+7. Temporary files are deleted after completion, cancellation, or failure.
 
 When `progress=1` is present, progress frames, metadata, data chunks, and completion status travel in the same response. This keeps the operation bound to one application instance.
 
@@ -58,6 +59,10 @@ The default container uses one Gunicorn worker with four threads. Multiple worke
 ### Source fidelity
 
 Resolution options come from extractor metadata. Linkdrop does not upscale video or reconstruct detail lost by the source. Photo files are copied without recompression whenever the extractor exposes the original asset.
+
+### Playback compatibility
+
+An `.mp4` extension does not guarantee that a device can decode the streams inside it. Linkdrop inspects completed MP4 files with ffprobe. Compatible H.264/AAC output is passed through; incompatible video is transcoded to H.264 with `yuv420p`, AAC audio, and fast-start metadata while retaining the selected resolution.
 
 ## Security boundaries
 

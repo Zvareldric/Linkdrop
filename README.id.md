@@ -15,9 +15,11 @@ Linkdrop adalah aplikasi web responsif untuk menganalisis dan mengunduh media pu
 
 - Menampilkan resolusi sumber dari terendah hingga tertinggi, termasuk 1440p dan 2160p jika tersedia.
 - Menggabungkan kualitas video pilihan dengan audio terbaik yang tersedia.
+- Mengonversi stream MP4 yang tidak kompatibel menjadi H.264/AAC tanpa mengubah resolusi pilihan.
 - Mendukung audio sumber serta MP3 128, 192, dan 320 kbps.
 - Mempertahankan foto asli dan mengemas post multi-foto menjadi ZIP.
 - Menampilkan progres download, pemrosesan, dan transfer secara langsung serta dapat dibatalkan.
+- Menyediakan tombol simpan yang mendukung file picker desktop, menu bagikan ponsel, dan download browser.
 - Menggunakan token bertanda tangan yang kedaluwarsa dan memblokir URL jaringan privat.
 - Memiliki UI responsif, metadata PWA, dukungan safe area iOS, fokus yang aksesibel, dan reduced motion.
 - Berjalan tanpa database maupun state job persisten.
@@ -63,6 +65,28 @@ Untuk macOS, pasang dependency native dengan:
 ```bash
 brew install ffmpeg deno
 ```
+
+## Akses privat dari ponsel
+
+Untuk penggunaan pribadi, setup yang disarankan adalah menjalankan Linkdrop di komputer lalu membukanya hanya melalui jaringan privat [Tailscale](https://tailscale.com/). Anda tidak perlu melakukan deployment publik dan aplikasi tetap dapat diakses dari data seluler maupun Wi-Fi lain.
+
+Jalankan Linkdrop pada port `5050`:
+
+```bash
+source .venv/bin/activate
+PORT=5050 gunicorn --bind 127.0.0.1:5050 --workers 1 --threads 4 --timeout 0 app:app
+```
+
+Pada terminal lain, hubungkan server lokal ke tailnet:
+
+```bash
+tailscale serve --bg 5050
+tailscale serve status
+```
+
+Pasang Tailscale di ponsel, masuk ke tailnet yang sama, lalu buka alamat HTTPS yang ditampilkan oleh `tailscale serve`. Komputer harus tetap menyala, tidak dalam kondisi sleep, tersambung ke Tailscale, dan menjalankan Linkdrop.
+
+Baca [Panduan Akses Privat Tailscale](docs/TAILSCALE.id.md) untuk instalasi, keamanan, cara menghentikan layanan, dan troubleshooting.
 
 ## Konfigurasi
 
@@ -153,6 +177,7 @@ Tambahkan `?progress=1` pada endpoint download untuk menggunakan progress stream
 
 - [Arsitektur](docs/ARCHITECTURE.md)
 - [Panduan Deployment](docs/DEPLOYMENT.md)
+- [Akses Privat Tailscale](docs/TAILSCALE.id.md)
 - [Product Requirements](docs/PRD.md)
 - [Keputusan Tooling](docs/TOOLING.md)
 

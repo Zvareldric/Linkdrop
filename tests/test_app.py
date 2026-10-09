@@ -181,6 +181,30 @@ class AppTests(unittest.TestCase):
         self.assertTrue(selector.startswith("b[height=2160]"))
         self.assertLess(selector.index("height=2160"), selector.index("height<=2160"))
 
+    def test_mp4_compatibility_accepts_h264_aac(self):
+        streams = [
+            {"codec_type": "video", "codec_name": "h264", "pix_fmt": "yuv420p"},
+            {"codec_type": "audio", "codec_name": "aac"},
+        ]
+
+        self.assertTrue(media_app._mp4_streams_are_compatible(streams))
+
+    def test_mp4_compatibility_rejects_vp9_video(self):
+        streams = [
+            {"codec_type": "video", "codec_name": "vp9", "pix_fmt": "yuv420p"},
+            {"codec_type": "audio", "codec_name": "aac"},
+        ]
+
+        self.assertFalse(media_app._mp4_streams_are_compatible(streams))
+
+    def test_mp4_compatibility_rejects_unsupported_pixel_format(self):
+        streams = [
+            {"codec_type": "video", "codec_name": "h264", "pix_fmt": "yuv444p"},
+            {"codec_type": "audio", "codec_name": "aac"},
+        ]
+
+        self.assertFalse(media_app._mp4_streams_are_compatible(streams))
+
     def test_tampered_download_token_is_rejected(self):
         response = self.client.get("/api/download/not-a-valid-token")
         self.assertEqual(response.status_code, 400)

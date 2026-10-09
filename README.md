@@ -15,9 +15,11 @@ Linkdrop is a responsive web application for inspecting and downloading public m
 
 - Lists real source resolutions from lowest to highest, including 1440p and 2160p when available.
 - Combines the selected video quality with the best available audio.
+- Converts incompatible MP4 streams to H.264/AAC while preserving the selected resolution.
 - Supports source audio and MP3 output at 128, 192, or 320 kbps.
 - Preserves original photos and packages multi-image posts as ZIP files.
 - Displays live download, processing, and transfer progress with cancellation support.
+- Uses an explicit save action that works with desktop pickers, mobile share sheets, and browser downloads.
 - Uses signed, expiring download tokens and blocks private-network URLs.
 - Provides a responsive UI, PWA metadata, iOS safe areas, accessible focus states, and reduced-motion support.
 - Runs without a database or persistent job state.
@@ -63,6 +65,28 @@ On macOS, install the native dependencies with:
 ```bash
 brew install ffmpeg deno
 ```
+
+## Private access from a phone
+
+For personal use, the recommended setup is to keep Linkdrop on your computer and publish it only inside your private [Tailscale](https://tailscale.com/) network. This avoids a public deployment and works from mobile data or another Wi-Fi network.
+
+Start Linkdrop on port `5050`:
+
+```bash
+source .venv/bin/activate
+PORT=5050 gunicorn --bind 127.0.0.1:5050 --workers 1 --threads 4 --timeout 0 app:app
+```
+
+In another terminal, expose the local service to your tailnet:
+
+```bash
+tailscale serve --bg 5050
+tailscale serve status
+```
+
+Install Tailscale on the phone, sign in to the same tailnet, and open the HTTPS address printed by `tailscale serve`. The computer must remain powered on, awake, connected to Tailscale, and running Linkdrop.
+
+See the complete [Private Tailscale Access Guide](docs/TAILSCALE.md) for installation, security notes, shutdown commands, and troubleshooting.
 
 ## Configuration
 
@@ -155,6 +179,7 @@ Add `?progress=1` to the download endpoint to use Linkdrop's framed progress str
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Deployment Guide](docs/DEPLOYMENT.md)
+- [Private Tailscale Access](docs/TAILSCALE.md)
 - [Product Requirements](docs/PRD.md)
 - [Tooling Decisions](docs/TOOLING.md)
 

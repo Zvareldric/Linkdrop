@@ -2,6 +2,8 @@
 
 Linkdrop performs CPU-intensive media processing and can transfer large files. A persistent VM or container host is the recommended production target.
 
+For a single user, a public deployment is usually unnecessary. Run Linkdrop on a trusted computer and use [Tailscale Serve](TAILSCALE.md) for private HTTPS access from your own devices.
+
 ## Recommended capacity
 
 Start with:
@@ -63,6 +65,8 @@ HTTP_TIMEOUT=30
 ```
 
 Do not raise `MAX_MEDIA_BYTES` beyond the runtime's available scratch space.
+
+Vercel is not the preferred target for large downloads or high-resolution transcoding. Tailscale is a better fit for personal use, while a persistent container or VM is a better fit for a public multi-user service.
 
 ## Cookies
 

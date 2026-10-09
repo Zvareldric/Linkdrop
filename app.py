@@ -9,6 +9,7 @@ import queue
 import shutil
 import socket
 import struct
+import subprocess
 import tempfile
 import threading
 import time
@@ -586,6 +587,91 @@ def _find_downloaded_file(folder: Path) -> Path:
     return max(candidates, key=lambda path: path.stat().st_mtime)
 
 
+def _mp4_streams_are_compatible(streams: list[dict]) -> bool:
+    """Return whether MP4 streams play in common browsers and phone players."""
+
+    video_streams = [stream for stream in streams if stream.get("codec_type") == "video"]
+    audio_streams = [stream for stream in streams if stream.get("codec_type") == "audio"]
+    if not video_streams:
+        return False
+
+    video = video_streams[0]
+    video_compatible = (
+        video.get("codec_name") == "h264"
+        and video.get("pix_fmt") in {None, "yuv420p", "yuvj420p"}
+    )
+    audio_compatible = not audio_streams or audio_streams[0].get("codec_name") == "aac"
+    return video_compatible and audio_compatible
+
+
+def _ensure_compatible_mp4(path: Path, progress=None) -> Path:
+    """Transcode incompatible MP4 codecs while retaining the selected resolution."""
+
+    if path.suffix.lower() != ".mp4":
+        return path
+
+    ffprobe = shutil.which("ffprobe")
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffprobe or not ffmpeg:
+        raise UserFacingError("FFmpeg/ffprobe tidak tersedia untuk membuat MP4 yang kompatibel.")
+
+    try:
+        probe = subprocess.run(
+            [
+                ffprobe,
+                "-v", "error",
+                "-show_entries", "stream=codec_type,codec_name,pix_fmt",
+                "-of", "json",
+                str(path),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        streams = json.loads(probe.stdout).get("streams") or []
+    except (subprocess.CalledProcessError, json.JSONDecodeError) as exc:
+        raise UserFacingError("File video hasil unduhan tidak dapat divalidasi.") from exc
+
+    if _mp4_streams_are_compatible(streams):
+        return path
+
+    if progress:
+        progress({
+            "percent": 92,
+            "phase": "Menyesuaikan kompatibilitas video",
+            "detail": "Mengonversi video ke H.264 dan audio ke AAC…",
+        })
+
+    converted = path.with_name(f"{path.stem}.compatible.mp4")
+    try:
+        subprocess.run(
+            [
+                ffmpeg,
+                "-y",
+                "-i", str(path),
+                "-map", "0:v:0",
+                "-map", "0:a?",
+                "-c:v", "libx264",
+                "-preset", "fast",
+                "-crf", "18",
+                "-pix_fmt", "yuv420p",
+                "-c:a", "aac",
+                "-b:a", "192k",
+                "-movflags", "+faststart",
+                str(converted),
+            ],
+            check=True,
+            capture_output=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        converted.unlink(missing_ok=True)
+        raise UserFacingError("Video gagal dikonversi ke format MP4 yang kompatibel.") from exc
+
+    path.unlink()
+    converted.replace(path)
+    return path
+
+
 def _download_video_or_audio(
     payload: dict,
     folder: Path,
@@ -693,16 +779,17 @@ def _download_video_or_audio(
         with yt_dlp.YoutubeDL({**options, **auth}) as ydl:
             ydl.download([url])
 
+    result = _find_downloaded_file(folder)
+    if kind == "video":
+        result = _ensure_compatible_mp4(result, progress)
+    if result.stat().st_size > MAX_MEDIA_BYTES:
+        raise UserFacingError(f"Ukuran hasil melebihi batas {MAX_MEDIA_BYTES // (1024 * 1024)} MB.")
     if progress:
         progress({
             "percent": 92,
             "phase": "File siap",
             "detail": "Mengirim file ke browser…",
         })
-
-    result = _find_downloaded_file(folder)
-    if result.stat().st_size > MAX_MEDIA_BYTES:
-        raise UserFacingError(f"Ukuran hasil melebihi batas {MAX_MEDIA_BYTES // (1024 * 1024)} MB.")
     return result
 
 
