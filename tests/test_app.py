@@ -266,7 +266,7 @@ class AppTests(unittest.TestCase):
     @patch("app._validate_public_url", return_value="https://example.com/video")
     @patch("app._download_video_or_audio")
     def test_download_endpoint_streams_attachment(self, download_mock, _validate):
-        def make_result(_payload, folder):
+        def make_result(_payload, folder, *_args):
             result = folder / "sample.mp4"
             result.write_bytes(b"media-bytes")
             return result
@@ -314,6 +314,31 @@ class AppTests(unittest.TestCase):
     @patch("app.shutil.disk_usage", return_value=SimpleNamespace(free=1_000_000_000))
     def test_batch_storage_limit_reserves_temporary_space(self, _disk_usage):
         self.assertEqual(media_app._batch_storage_limit(), 400_000_000)
+
+    @patch("app._download_payload")
+    def test_youtube_403_retries_with_a_new_working_folder(self, download_mock):
+        calls = []
+
+        def download(payload, folder, progress, cancelled):
+            calls.append(folder)
+            if len(calls) == 1:
+                raise media_app.UserFacingError("HTTP Error 403: Forbidden")
+            result = folder / "retry.mp4"
+            result.write_bytes(b"media-bytes")
+            return result
+
+        download_mock.side_effect = download
+        events = []
+        with tempfile.TemporaryDirectory() as parent:
+            result = media_app._download_with_retry(
+                {"url": "https://youtu.be/example", "kind": "video"},
+                Path(parent),
+                events.append,
+            )
+
+            self.assertEqual(result.name, "retry.mp4")
+            self.assertEqual([folder.name for folder in calls], ["attempt-1", "attempt-2"])
+        self.assertEqual(events[0]["phase"], "Mencoba ulang unduhan")
 
     def test_batch_endpoint_rejects_more_than_thirty_items(self):
         response = self.client.post("/api/batch/download", json={

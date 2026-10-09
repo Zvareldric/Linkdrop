@@ -1030,6 +1030,41 @@ def _download_payload(
     return _download_video_or_audio(payload, folder, progress, cancelled)
 
 
+def _should_retry_media_error(payload: dict, exc: Exception) -> bool:
+    hostname = (urlparse(payload.get("url", "")).hostname or "").lower()
+    message = str(exc).lower()
+    is_youtube = hostname == "youtu.be" or hostname == "youtube.com" or hostname.endswith(".youtube.com")
+    return is_youtube and (
+        "403" in message or "forbidden" in message
+    )
+
+
+def _download_with_retry(
+    payload: dict,
+    folder: Path,
+    progress=None,
+    cancelled: threading.Event | None = None,
+) -> Path:
+    for attempt in range(2):
+        if cancelled and cancelled.is_set():
+            raise UserFacingError("Unduhan dibatalkan.")
+        attempt_folder = folder / f"attempt-{attempt + 1}"
+        attempt_folder.mkdir(exist_ok=True)
+        try:
+            return _download_payload(payload, attempt_folder, progress, cancelled)
+        except Exception as exc:
+            if attempt or not _should_retry_media_error(payload, exc):
+                raise
+            if progress:
+                progress({
+                    "percent": 1,
+                    "phase": "Mencoba ulang unduhan",
+                    "detail": "YouTube menolak URL media sementara. Menyiapkan sesi baru…",
+                })
+
+    raise UserFacingError("Unduhan tidak dapat diproses.")
+
+
 def _batch_storage_limit() -> int:
     free_bytes = shutil.disk_usage(WORK_DIR).free
     return min(MAX_MEDIA_BYTES, int(free_bytes / BATCH_DISK_FACTOR))
@@ -1094,7 +1129,7 @@ def _download_batch(
                 })
 
             try:
-                result = _download_payload(payload, item_folder, item_progress, cancelled)
+                result = _download_with_retry(payload, item_folder, item_progress, cancelled)
                 result_size = result.stat().st_size
                 if archived_bytes + result_size > storage_limit:
                     raise UserFacingError("Ukuran aktual media melewati sisa kapasitas paket.")
@@ -1161,7 +1196,7 @@ def _stream_progress_download(
             if batch_payloads is not None:
                 result = _download_batch(batch_payloads, cleanup_folder, package_number, report, cancelled)
             else:
-                result = _download_payload(payload, cleanup_folder, report, cancelled)
+                result = _download_with_retry(payload, cleanup_folder, report, cancelled)
             events.put(("file", result))
         except Exception as exc:
             app.logger.warning("Media progress download failed: %s", exc)
@@ -1312,7 +1347,7 @@ def download(token: str):
         if payload["kind"] == "gallery":
             result = _download_gallery(payload, cleanup_folder)
         else:
-            result = _download_video_or_audio(payload, cleanup_folder)
+            result = _download_with_retry(payload, cleanup_folder)
         return _stream_file(result, cleanup_folder)
     except Exception as exc:
         shutil.rmtree(cleanup_folder, ignore_errors=True)
