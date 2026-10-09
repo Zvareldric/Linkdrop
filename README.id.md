@@ -19,7 +19,7 @@ Linkdrop adalah aplikasi web responsif untuk menganalisis dan mengunduh media pu
 - Mendukung audio sumber serta MP3 128, 192, dan 320 kbps.
 - Mempertahankan foto asli dan mengemas post multi-foto menjadi ZIP.
 - Mempertahankan unduhan satu link sebagai mode utama dan menyediakan antrean multi-link opsional dengan pilihan per media.
-- Membagi pilihan besar menjadi beberapa ZIP sesuai kapasitas penyimpanan dan tetap melanjutkan ketika satu media gagal.
+- Menggabungkan link pilihan dalam ZIP datar sesuai kapasitas penyimpanan; galeri menjadi folder, bukan ZIP di dalam ZIP.
 - Menampilkan progres download, pemrosesan, dan transfer secara langsung serta dapat dibatalkan.
 - Menyediakan tombol simpan yang mendukung file picker desktop, menu bagikan ponsel, dan download browser.
 - Menggunakan token bertanda tangan yang kedaluwarsa dan memblokir URL jaringan privat.
@@ -42,7 +42,7 @@ Progres dan byte file dikirim melalui satu respons HTTP. Setiap worker sementara
 
 ### Beberapa link
 
-`Satu link` tetap menjadi mode utama. Pilih `Beberapa link` untuk menempel satu URL publik per baris, menganalisis maksimal dua URL bersamaan, menentukan output setiap media, dan hanya mengunduh media yang dicentang sebagai ZIP. Pilihan di atas 10 media menampilkan peringatan; setiap paket memuat maksimal 30 media dan dibagi pada 80% batas aman penyimpanan sementara. Paket diunduh berurutan agar ZIP berikutnya tidak menggantikan file yang belum disimpan.
+`Satu link` tetap menjadi mode utama. Pilih `Beberapa link` untuk menempel satu URL publik per baris, menganalisis maksimal dua URL bersamaan, menentukan output setiap media, dan hanya mengunduh media yang dicentang dalam satu ZIP datar. Aset carousel dan galeri ditempatkan dalam folder bernama di dalam ZIP tersebut, sehingga tidak perlu ekstraksi kedua. Pilihan di atas 10 media menampilkan peringatan; setiap paket memuat maksimal 30 link pilihan dan dibagi pada 80% batas aman penyimpanan sementara. Paket diunduh berurutan agar ZIP berikutnya tidak menggantikan file yang belum disimpan.
 
 ## Kebutuhan sistem
 

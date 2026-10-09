@@ -47,8 +47,8 @@ When `progress=1` is present, progress frames, metadata, data chunks, and comple
 1. The browser reuses `POST /api/info` with at most two concurrent analyses.
 2. The user explicitly selects the items and output choices to include.
 3. The browser groups signed choices at 80% of the safe package limit and sends at most 30 tokens to `POST /api/batch/download`.
-4. The server validates every token before processing starts, then downloads each item sequentially with the existing media pipeline.
-5. Successful files are stored without recompression in a ZIP; individual failures are written to `linkdrop-report.txt` without stopping other items.
+4. The server validates every token before processing starts, then downloads each selected link sequentially with the existing media pipeline.
+5. Successful files are stored without recompression in a flat ZIP. Multi-item galleries are placed in a unique folder in the outer ZIP instead of becoming nested ZIP files; individual failures are written to `linkdrop-report.txt` without stopping other items.
 6. Available disk space is divided by 2.5 and capped by `MAX_MEDIA_BYTES` to reserve room for source, conversion, and archive files.
 7. Each ZIP is streamed with the same framed progress protocol and all temporary data is removed afterward.
 

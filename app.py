@@ -41,6 +41,7 @@ PROGRESS_MIME = "application/vnd.linkdrop.progress"
 MAX_BATCH_ITEMS = 30
 BATCH_WARNING_ITEMS = 10
 BATCH_DISK_FACTOR = 2.5
+MAX_GALLERY_ITEMS = 20
 
 WORK_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -964,16 +965,19 @@ def _download_remote(
     return downloaded
 
 
-def _download_gallery(
+def _download_gallery_items(
     payload: dict,
     folder: Path,
+    budget: int = MAX_MEDIA_BYTES,
     progress=None,
     cancelled: threading.Event | None = None,
-) -> Path:
+) -> tuple[str, list[Path]]:
     if progress:
         progress({"percent": 2, "phase": "Membaca media", "detail": "Memuat daftar foto dan video…"})
     info = _extract_info(payload["url"])
-    entries = _entries(info)
+    entries = _entries(info)[:MAX_GALLERY_ITEMS]
+    if not entries:
+        raise UserFacingError("Tidak ada media yang dapat diunduh.")
     item_paths = []
     used_bytes = 0
 
@@ -999,11 +1003,22 @@ def _download_gallery(
         used_bytes += _download_remote(
             source,
             destination,
-            MAX_MEDIA_BYTES - used_bytes,
+            budget - used_bytes,
             progress=item_progress,
             cancelled=cancelled,
         )
         item_paths.append(destination)
+
+    return info.get("title") or info.get("id") or "media", item_paths
+
+
+def _download_gallery(
+    payload: dict,
+    folder: Path,
+    progress=None,
+    cancelled: threading.Event | None = None,
+) -> Path:
+    _, item_paths = _download_gallery_items(payload, folder, MAX_MEDIA_BYTES, progress, cancelled)
 
     if len(item_paths) == 1:
         return item_paths[0]
@@ -1083,6 +1098,17 @@ def _unique_archive_name(filename: str, used_names: set[str]) -> str:
     return candidate
 
 
+def _unique_archive_folder(name: str, used_names: set[str]) -> str:
+    safe_name = secure_filename(name) or "media"
+    candidate = safe_name
+    counter = 2
+    while f"{candidate.lower()}/" in used_names:
+        candidate = f"{safe_name}-{counter}"
+        counter += 1
+    used_names.add(f"{candidate.lower()}/")
+    return candidate
+
+
 def _download_batch(
     payloads: list[dict],
     folder: Path,
@@ -1129,12 +1155,32 @@ def _download_batch(
                 })
 
             try:
-                result = _download_with_retry(payload, item_folder, item_progress, cancelled)
-                result_size = result.stat().st_size
-                if archived_bytes + result_size > storage_limit:
-                    raise UserFacingError("Ukuran aktual media melewati sisa kapasitas paket.")
-                bundle.write(result, arcname=_unique_archive_name(result.name, used_names))
-                archived_bytes += result_size
+                if payload["kind"] == "gallery":
+                    title, results = _download_gallery_items(
+                        payload,
+                        item_folder,
+                        storage_limit - archived_bytes,
+                        item_progress,
+                        cancelled,
+                    )
+                    result_size = sum(result.stat().st_size for result in results)
+                    if archived_bytes + result_size > storage_limit:
+                        raise UserFacingError("Ukuran aktual media melewati sisa kapasitas paket.")
+                    if len(results) == 1:
+                        result = results[0]
+                        bundle.write(result, arcname=_unique_archive_name(result.name, used_names))
+                    else:
+                        archive_folder = _unique_archive_folder(title, used_names)
+                        for result in results:
+                            bundle.write(result, arcname=f"{archive_folder}/{result.name}")
+                    archived_bytes += result_size
+                else:
+                    result = _download_with_retry(payload, item_folder, item_progress, cancelled)
+                    result_size = result.stat().st_size
+                    if archived_bytes + result_size > storage_limit:
+                        raise UserFacingError("Ukuran aktual media melewati sisa kapasitas paket.")
+                    bundle.write(result, arcname=_unique_archive_name(result.name, used_names))
+                    archived_bytes += result_size
                 completed += 1
             except OSError:
                 raise

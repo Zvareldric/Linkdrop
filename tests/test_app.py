@@ -353,6 +353,51 @@ class AppTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
 
+    @patch("app._download_gallery_items")
+    def test_single_gallery_keeps_its_zip_output(self, gallery_mock):
+        def make_gallery(_payload, folder, _budget, _progress, _cancelled):
+            first = folder / "01.jpg"
+            second = folder / "02.jpg"
+            first.write_bytes(b"one")
+            second.write_bytes(b"two")
+            return "Galeri Foto", [first, second]
+
+        gallery_mock.side_effect = make_gallery
+        with tempfile.TemporaryDirectory() as parent:
+            result = media_app._download_gallery(
+                {"url": "https://example.com/gallery", "kind": "gallery"}, Path(parent)
+            )
+            with zipfile.ZipFile(result) as bundle:
+                self.assertEqual(set(bundle.namelist()), {"01.jpg", "02.jpg"})
+
+    @patch("app._download_gallery_items")
+    def test_batch_flattens_gallery_items_into_outer_zip(self, gallery_mock):
+        def make_gallery(_payload, folder, _budget, _progress, _cancelled):
+            first = folder / "01.jpg"
+            second = folder / "02.jpg"
+            first.write_bytes(b"one")
+            second.write_bytes(b"two")
+            return "Galeri Foto", [first, second]
+
+        gallery_mock.side_effect = make_gallery
+        with tempfile.TemporaryDirectory() as parent:
+            result = media_app._download_batch(
+                [
+                    {"url": "https://example.com/gallery-one", "kind": "gallery"},
+                    {"url": "https://example.com/gallery-two", "kind": "gallery"},
+                ],
+                Path(parent),
+                1,
+            )
+            with zipfile.ZipFile(result) as bundle:
+                self.assertEqual(set(bundle.namelist()), {
+                    "Galeri_Foto/01.jpg",
+                    "Galeri_Foto/02.jpg",
+                    "Galeri_Foto-2/01.jpg",
+                    "Galeri_Foto-2/02.jpg",
+                })
+                self.assertFalse(any(path.endswith(".zip") for path in bundle.namelist()))
+
     @patch("app._validate_public_url", side_effect=lambda url: url)
     @patch("app._download_video_or_audio")
     def test_batch_download_keeps_successful_items_when_one_fails(self, download_mock, _validate):

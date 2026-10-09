@@ -19,7 +19,7 @@ Linkdrop is a responsive web application for inspecting and downloading public m
 - Supports source audio and MP3 output at 128, 192, or 320 kbps.
 - Preserves original photos and packages multi-image posts as ZIP files.
 - Keeps single-link downloads as the default and offers an optional multi-link queue with per-item selection.
-- Splits large selections into storage-aware ZIP packages and continues when individual items fail.
+- Combines selected links into a flat, storage-aware ZIP; galleries become folders instead of ZIP files inside ZIP files.
 - Displays live download, processing, and transfer progress with cancellation support.
 - Uses an explicit save action that works with desktop pickers, mobile share sheets, and browser downloads.
 - Uses signed, expiring download tokens and blocks private-network URLs.
@@ -42,7 +42,7 @@ The download protocol carries progress events and file bytes in one HTTP respons
 
 ### Multiple links
 
-`Single link` remains the default mode. Select `Multiple links` to paste one public URL per line, analyze at most two URLs concurrently, choose the output for each item, and download only the checked items as ZIP. More than 10 selections show a warning; packages contain at most 30 media and are split at 80% of the safe temporary-storage limit. Package downloads remain sequential so the next ZIP does not replace an unsaved file.
+`Single link` remains the default mode. Select `Multiple links` to paste one public URL per line, analyze at most two URLs concurrently, choose the output for each item, and download only the checked items as one flat ZIP. Carousel and gallery assets are placed in a named folder inside that ZIP, so no second extraction is needed. More than 10 selections show a warning; packages contain at most 30 selected links and are split at 80% of the safe temporary-storage limit. Package downloads remain sequential so the next ZIP does not replace an unsaved file.
 
 ## Requirements
 
