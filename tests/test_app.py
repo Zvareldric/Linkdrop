@@ -68,6 +68,17 @@ class AppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.get_json()["ok"])
 
+    @patch("app.secrets.token_urlsafe", return_value="generated-local-secret")
+    def test_token_secret_is_random_when_not_configured(self, token_urlsafe_mock):
+        secret = media_app._token_secret_for_runtime("", False)
+
+        self.assertEqual(secret, "generated-local-secret")
+        token_urlsafe_mock.assert_called_once_with(32)
+
+    def test_token_secret_is_required_on_vercel(self):
+        with self.assertRaisesRegex(RuntimeError, "DOWNLOAD_TOKEN_SECRET"):
+            media_app._token_secret_for_runtime("", True)
+
     @patch("app.shutil.which")
     def test_node_runtime_is_enabled_for_youtube_challenges(self, which_mock):
         which_mock.side_effect = lambda executable: (

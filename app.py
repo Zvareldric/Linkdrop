@@ -6,6 +6,7 @@ import json
 import mimetypes
 import os
 import queue
+import secrets
 import shutil
 import socket
 import struct
@@ -48,10 +49,14 @@ WORK_DIR.mkdir(parents=True, exist_ok=True)
 app = Flask(__name__)
 app.config["JSON_SORT_KEYS"] = False
 
+def _token_secret_for_runtime(configured_secret: str, is_vercel: bool) -> str:
+    if is_vercel and not configured_secret:
+        raise RuntimeError("DOWNLOAD_TOKEN_SECRET wajib diatur pada deployment Vercel.")
+    return configured_secret or secrets.token_urlsafe(32)
+
+
 _configured_token_secret = os.environ.get("DOWNLOAD_TOKEN_SECRET", "").strip()
-if IS_VERCEL and not _configured_token_secret:
-    raise RuntimeError("DOWNLOAD_TOKEN_SECRET wajib diatur pada deployment Vercel.")
-_token_secret = _configured_token_secret or "linkdrop-local-development-secret"
+_token_secret = _token_secret_for_runtime(_configured_token_secret, IS_VERCEL)
 _signer = URLSafeTimedSerializer(_token_secret, salt="linkdrop-download-v1")
 
 
