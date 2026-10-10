@@ -18,77 +18,6 @@ Linkdrop membutuhkan akses internet keluar ke sumber media publik. Setelah depen
 
 Untuk komputer Windows, mulai dari [Windows — Docker Desktop](#windows--docker-desktop-direkomendasikan). Ini adalah setup Windows yang didukung dan menjaga Linkdrop tetap berada dalam container Linux. Pengguna macOS dan Linux dapat memakai bagian Python native di bawah.
 
-## macOS — Python native
-
-### 1. Pasang prasyarat
-
-Pasang Homebrew bila belum tersedia, lalu pasang Python 3.12, FFmpeg, Deno, dan Git:
-
-```bash
-brew install python@3.12 ffmpeg deno git
-```
-
-Homebrew dapat meminta kata sandi administrator macOS ketika memasang paket. Deno dipakai `yt-dlp` untuk challenge JavaScript dari beberapa sumber.
-
-### 2. Pasang Linkdrop
-
-```bash
-git clone https://github.com/Zvareldric/Linkdrop.git
-cd Linkdrop
-
-python3.12 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-
-export DOWNLOAD_TOKEN_SECRET="$(openssl rand -hex 32)"
-PORT=5000 gunicorn --bind 127.0.0.1:5000 --workers 1 --threads 4 --timeout 0 app:app
-```
-
-Buka `http://127.0.0.1:5000` pada komputer yang sama.
-
-### 3. Akses privat dari ponsel (opsional)
-
-Pasang Tailscale di Mac dan ponsel, masuk ke tailnet yang sama, lalu ikuti [Akses Privat Tailscale](TAILSCALE.id.md). Gunakan Gunicorn pada loopback, bukan server development:
-
-```bash
-source .venv/bin/activate
-export DOWNLOAD_TOKEN_SECRET="$(openssl rand -hex 32)"
-PORT=5050 gunicorn --bind 127.0.0.1:5050 --workers 1 --threads 4 --timeout 0 app:app
-```
-
-## Linux — Python native
-
-Perintah ini ditujukan untuk Ubuntu 24.04 atau distribusi lain yang menyediakan Python 3.12. Gunakan perintah package manager yang setara untuk distribusi lain.
-
-### 1. Pasang prasyarat
-
-```bash
-sudo apt update
-sudo apt install --yes git python3.12 python3.12-venv ffmpeg
-```
-
-Pasang Deno 2.3+ atau Node.js 22+ melalui sumber paket resmi distribusi Anda. Deno disarankan untuk sumber yang memerlukan runtime JavaScript.
-
-### 2. Pasang Linkdrop
-
-```bash
-git clone https://github.com/Zvareldric/Linkdrop.git
-cd Linkdrop
-
-python3.12 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-
-export DOWNLOAD_TOKEN_SECRET="$(openssl rand -hex 32)"
-PORT=5000 gunicorn --bind 127.0.0.1:5000 --workers 1 --threads 4 --timeout 0 app:app
-```
-
-Buka `http://127.0.0.1:5000` dari komputer yang sama. `sudo` hanya diperlukan untuk memasang paket; jangan menjalankan Linkdrop sebagai root.
-
-Untuk akses privat dari perangkat lain, pasang Tailscale lalu gunakan perintah Gunicorn loopback pada bagian macOS atau ikuti [Akses Privat Tailscale](TAILSCALE.id.md).
-
 ## Windows — Docker Desktop (direkomendasikan)
 
 Gunicorn adalah server berorientasi Unix, sehingga Docker Desktop adalah jalur Windows yang didukung. Docker menjalankan Linkdrop dalam container Linux dari repository ini dan hanya membuka port ke komputer lokal.
@@ -128,6 +57,42 @@ Invoke-RestMethod http://127.0.0.1:5050/api/health
 ### 3. Akses privat dari ponsel (opsional)
 
 Pasang Tailscale di Windows dan ponsel, masuk ke tailnet yang sama, lalu atur Tailscale Serve untuk meneruskan port lokal `5050`. Ikuti [Akses Privat Tailscale](TAILSCALE.id.md) untuk model keamanan dan troubleshooting. Perintah Docker di atas sudah menjaga Linkdrop tidak terbuka ke LAN karena bind ke loopback.
+
+## macOS dan Linux — Python native
+
+### 1. Pasang prasyarat
+
+Di macOS, pasang Homebrew bila belum tersedia, lalu jalankan:
+
+```bash
+brew install python@3.12 ffmpeg deno git
+```
+
+Di Ubuntu 24.04 atau distribusi Linux lain yang menyediakan Python 3.12, jalankan:
+
+```bash
+sudo apt update
+sudo apt install --yes git python3.12 python3.12-venv ffmpeg
+```
+
+Pasang Deno 2.3+ atau Node.js 22+ di Linux melalui sumber paket resmi distribusi. Deno dipakai `yt-dlp` untuk challenge JavaScript dari beberapa sumber.
+
+### 2. Pasang dan jalankan Linkdrop
+
+```bash
+git clone https://github.com/Zvareldric/Linkdrop.git
+cd Linkdrop
+
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+
+export DOWNLOAD_TOKEN_SECRET="$(openssl rand -hex 32)"
+PORT=5000 gunicorn --bind 127.0.0.1:5000 --workers 1 --threads 4 --timeout 0 app:app
+```
+
+Buka `http://127.0.0.1:5000` pada komputer yang sama. Di Linux, gunakan `sudo` hanya untuk memasang paket; jangan menjalankan Linkdrop sebagai root. Untuk akses privat dari ponsel, ikuti [Akses Privat Tailscale](TAILSCALE.id.md).
 
 ## Verifikasi instalasi
 

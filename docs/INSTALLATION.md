@@ -18,77 +18,6 @@ Linkdrop needs outbound internet access to public media sources. It does not nee
 
 For a Windows computer, start with [Windows — Docker Desktop](#windows--docker-desktop-recommended). It is the supported Windows setup and keeps Linkdrop inside its Linux container. macOS and Linux users can use the native Python sections below.
 
-## macOS — native Python
-
-### 1. Install prerequisites
-
-Install Homebrew if it is not already present, then install Python 3.12, FFmpeg, Deno, and Git:
-
-```bash
-brew install python@3.12 ffmpeg deno git
-```
-
-Homebrew may request your macOS administrator password while installing packages. Deno is used by `yt-dlp` for JavaScript challenges from some sources.
-
-### 2. Install Linkdrop
-
-```bash
-git clone https://github.com/Zvareldric/Linkdrop.git
-cd Linkdrop
-
-python3.12 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-
-export DOWNLOAD_TOKEN_SECRET="$(openssl rand -hex 32)"
-PORT=5000 gunicorn --bind 127.0.0.1:5000 --workers 1 --threads 4 --timeout 0 app:app
-```
-
-Open `http://127.0.0.1:5000` on the same computer.
-
-### 3. Private phone access (optional)
-
-Install Tailscale on the Mac and phone, sign in to the same tailnet, then follow [Private Tailscale Access](TAILSCALE.md). Run Gunicorn on loopback instead of using the development server:
-
-```bash
-source .venv/bin/activate
-export DOWNLOAD_TOKEN_SECRET="$(openssl rand -hex 32)"
-PORT=5050 gunicorn --bind 127.0.0.1:5050 --workers 1 --threads 4 --timeout 0 app:app
-```
-
-## Linux — native Python
-
-These commands target Ubuntu 24.04 or another distribution that provides Python 3.12. Use the equivalent package manager commands on other distributions.
-
-### 1. Install prerequisites
-
-```bash
-sudo apt update
-sudo apt install --yes git python3.12 python3.12-venv ffmpeg
-```
-
-Install Deno 2.3+ or Node.js 22+ using your distribution's supported package source. Deno is recommended for source sites that require a JavaScript runtime.
-
-### 2. Install Linkdrop
-
-```bash
-git clone https://github.com/Zvareldric/Linkdrop.git
-cd Linkdrop
-
-python3.12 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-
-export DOWNLOAD_TOKEN_SECRET="$(openssl rand -hex 32)"
-PORT=5000 gunicorn --bind 127.0.0.1:5000 --workers 1 --threads 4 --timeout 0 app:app
-```
-
-Open `http://127.0.0.1:5000` from the same computer. `sudo` is required only to install packages; do not run Linkdrop itself as root.
-
-For private access from another device, install Tailscale and use the loopback Gunicorn command in the macOS section or follow [Private Tailscale Access](TAILSCALE.md).
-
 ## Windows — Docker Desktop (recommended)
 
 Gunicorn is a Unix-oriented server, so Docker Desktop is the supported Windows route. It runs Linkdrop in the repository's Linux container and publishes it only to the local computer.
@@ -128,6 +57,42 @@ Invoke-RestMethod http://127.0.0.1:5050/api/health
 ### 3. Private phone access (optional)
 
 Install Tailscale on Windows and the phone, sign in to the same tailnet, then configure Tailscale Serve to proxy local port `5050`. Follow [Private Tailscale Access](TAILSCALE.md) for the security model and troubleshooting. The Docker command above already keeps Linkdrop off the LAN by binding it to loopback.
+
+## macOS and Linux — native Python
+
+### 1. Install prerequisites
+
+On macOS, install Homebrew if needed, then run:
+
+```bash
+brew install python@3.12 ffmpeg deno git
+```
+
+On Ubuntu 24.04 or another Linux distribution with Python 3.12, run:
+
+```bash
+sudo apt update
+sudo apt install --yes git python3.12 python3.12-venv ffmpeg
+```
+
+Install Deno 2.3+ or Node.js 22+ on Linux through the distribution's supported package source. Deno is used by `yt-dlp` for JavaScript challenges from some sources.
+
+### 2. Install and run Linkdrop
+
+```bash
+git clone https://github.com/Zvareldric/Linkdrop.git
+cd Linkdrop
+
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+
+export DOWNLOAD_TOKEN_SECRET="$(openssl rand -hex 32)"
+PORT=5000 gunicorn --bind 127.0.0.1:5000 --workers 1 --threads 4 --timeout 0 app:app
+```
+
+Open `http://127.0.0.1:5000` on the same computer. On Linux, use `sudo` only to install packages; do not run Linkdrop itself as root. For private phone access, follow [Private Tailscale Access](TAILSCALE.md).
 
 ## Verify an installation
 
