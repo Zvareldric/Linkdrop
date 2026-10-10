@@ -122,28 +122,6 @@
     }
 
     .brand-mark svg { width: 24px; height: 24px; }
-    }
-
-    .status-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 11px;
-      color: #445069;
-      background: rgba(255, 255, 255, .78);
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      font-size: 12px;
-    }
-
-    .status-dot {
-      width: 7px;
-      height: 7px;
-      background: #28a968;
-      border-radius: 50%;
-      box-shadow: 0 0 0 3px rgba(40, 169, 104, .13);
-      animation: status-pulse 2.4s ease-out infinite;
-    }
 
     .hero {
       display: grid;
@@ -753,7 +731,6 @@
     .save-dialog-actions .button { min-height: 46px; }
 
     @keyframes ambient-drift { to { transform: translate3d(6vw, 4vw, 0) scale(1.08); } }
-    @keyframes status-pulse { 65%, 100% { box-shadow: 0 0 0 7px rgba(40, 169, 104, 0); } }
     @keyframes visual-enter { from { opacity: 0; transform: translateY(16px) rotate(1deg); } }
     @keyframes slip-float { to { transform: translateY(-5px); } }
     @keyframes meter-shine { to { background-position: -180% 0; } }
@@ -769,25 +746,6 @@
       pointer-events: none;
     }
 
-    .fineprint {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 14px;
-      margin-top: 20px;
-    }
-
-    .fineprint-item {
-      color: var(--muted);
-      background: rgba(255, 255, 255, .7);
-      border: 1px solid var(--line);
-      border-radius: 15px;
-      padding: 17px;
-      font-size: 12px;
-      line-height: 1.6;
-    }
-
-    .fineprint-item strong { display: block; margin-bottom: 5px; color: #34405a; }
-
     footer {
       margin-top: 24px;
       color: #737d8e;
@@ -798,7 +756,6 @@
 
     @media (max-width: 720px) {
       .topbar { margin-bottom: 42px; }
-      .status-pill { display: none; }
       .hero { grid-template-columns: 1fr; gap: 28px; }
       .transfer-visual { grid-template-columns: repeat(3, 1fr); }
       .media-slip { padding: 13px 15px; }
@@ -808,7 +765,6 @@
       .button-primary { flex: 1; }
       .result { grid-template-columns: 1fr; }
       .thumb-wrap { max-height: 250px; }
-      .fineprint { grid-template-columns: 1fr; gap: 18px; }
       .batch-toolbar { align-items: flex-start; flex-direction: column; }
       .batch-input-actions { display: grid; grid-template-columns: 1fr 1fr; }
       .batch-package { align-items: stretch; flex-direction: column; }
@@ -852,12 +808,11 @@
   <main class="shell">
     <header class="topbar">
       <div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3v11m0 0-4-4m4 4 4-4M5 18h14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"/><path d="M18.5 5.5 21 8" stroke="#ffb19d" stroke-linecap="round" stroke-width="2.2"/></svg></span> Linkdrop</div>
-      <div class="status-pill"><span class="status-dot"></span> Siap digunakan</div>
     </header>
 
     <section class="hero">
       <div class="hero-copy">
-        <p class="kicker">Unduh media dengan lebih jelas</p>
+        <p class="kicker">Unduh media dengan kualitas real!</p>
         <h1>Pilih kualitasnya. Simpan medianya.</h1>
         <p class="lead">Tempel link dari platform favoritmu, lihat format dan perkiraan ukuran file, lalu unduh video, audio, atau foto yang kamu perlukan.</p>
         <div class="platforms" aria-label="Platform populer">
@@ -978,12 +933,6 @@
         </div>
       </div>
     </dialog>
-
-    <section class="fineprint">
-      <div class="fineprint-item"><strong>Pilihan yang transparan</strong>Resolusi, format, dan perkiraan ukuran ditampilkan sebelum unduhan dimulai.</div>
-      <div class="fineprint-item"><strong>Siap diputar</strong>Video yang tidak kompatibel disesuaikan ke H.264/AAC. Kualitas MP3 tetap mengikuti audio sumber.</div>
-      <div class="fineprint-item"><strong>Privat dan sementara</strong>File hanya disimpan selama proses berlangsung, lalu dihapus dari server.</div>
-    </section>
 
     <footer>Gunakan hanya untuk konten milik sendiri, berlisensi, atau yang Anda punya izin untuk mengunduh. Patuhi hak cipta dan ketentuan platform.</footer>
   </main>

@@ -74,6 +74,10 @@ test("halaman tetap utuh pada viewport ponsel", async ({ page }) => {
   const viewportFits = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
   expect(viewportFits).toBe(true);
 
+  if (await page.evaluate(() => window.innerWidth > 720)) {
+    await expect(page.locator(".hero")).toHaveCSS("display", "grid");
+  }
+
   for (const button of await page.getByRole("button").all()) {
     if (await button.isVisible()) {
       const box = await button.boundingBox();
