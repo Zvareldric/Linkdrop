@@ -76,6 +76,11 @@ test("halaman tetap utuh pada viewport ponsel", async ({ page }) => {
   await expect(page.locator(".media-slip")).toHaveCount(3);
   await expect(page.locator(".media-icon")).toHaveCount(3);
   await expect(page.locator(".media-line")).toHaveCount(3);
+  await expect(page.locator(".platform-marquee")).toBeVisible();
+  await expect(page.locator(".platform-logo-set").first().locator(".platform-logo")).toHaveCount(14);
+  await expect(page.locator(".input-shell button, .batch-input-shell button")).toHaveCount(0);
+  await expect(page.locator(".input-actions button")).toHaveCount(2);
+  await expect(page.locator(".batch-input-actions button")).toHaveCount(2);
 
   const viewportFits = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
   expect(viewportFits).toBe(true);
@@ -90,6 +95,26 @@ test("halaman tetap utuh pada viewport ponsel", async ({ page }) => {
       expect(box.height).toBeGreaterThanOrEqual(44);
     }
   }
+});
+
+test("pilihan bahasa menerjemahkan antarmuka tanpa mengubah layout", async ({ page }) => {
+  await expect(page.getByText(/^Maks file: \d+ MB$/)).toHaveCount(2);
+  await page.getByRole("button", { name: "EN", exact: true }).click();
+
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page.getByRole("heading", { name: "Choose the quality. Save the media." })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Multiple links" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Multiple links" })).toHaveCSS("font-size", "15px");
+  await expect(page.getByText(/^Max file: \d+ MB$/)).toHaveCount(2);
+  await expect(page.getByRole("button", { name: "EN", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#saveDownload")).toHaveText("Save to device");
+  await expect(page.locator("#saveDownload")).toHaveCSS("font-size", "14px");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+  await page.getByRole("button", { name: "ID", exact: true }).click();
+  await expect(page.locator("html")).toHaveAttribute("lang", "id");
+  await expect(page.locator("#saveDownload")).toHaveText("Simpan ke perangkat");
+  await expect(page.getByRole("heading", { name: "Pilih kualitasnya. Simpan medianya." })).toBeVisible();
 });
 
 test("alur analisis berakhir pada tombol simpan yang dapat mengunduh file", async ({ page }) => {
@@ -164,7 +189,7 @@ test("kontrol mode, clipboard, format, dan pilihan batch memperbarui antarmuka",
   await page.evaluate(() => { window.__linkdropClipboard = "https://example.com/one\nhttps://example.com/two"; });
   await page.locator("#batchPasteButton").click();
   expect(await page.getByLabel("Tempel beberapa link").evaluate(element => element.value)).toContain("https://example.com/two");
-  await page.getByRole("button", { name: "Analisis semua" }).click();
+  await page.getByRole("button", { name: "Analisis", exact: true }).click();
 
   await expect(page.locator(".batch-item")).toHaveCount(2);
   await page.locator(".batch-choice").first().selectOption({ index: 1 });
@@ -197,7 +222,7 @@ test("pembagian paket menjelaskan batas penyimpanan kepada pengguna", async ({ p
 
   await page.getByRole("tab", { name: "Beberapa link" }).click();
   await page.getByLabel("Tempel beberapa link").fill("https://example.com/one\nhttps://example.com/two");
-  await page.getByRole("button", { name: "Analisis semua" }).click();
+  await page.getByRole("button", { name: "Analisis", exact: true }).click();
 
   await expect(page.getByRole("status")).toContainText("Unduhan dibagi menjadi 2 paket ZIP");
   await expect(page.getByRole("status")).toContainText("agar tiap paket tetap aman");
@@ -263,7 +288,7 @@ test("menu beberapa link hanya mengunduh media yang dipilih", async ({ page }) =
   await expect(page.getByLabel("Tempel link media")).toBeHidden();
   await expect(page.getByRole("button", { name: "Analisis antrean berikutnya" })).toBeHidden();
   await page.getByLabel("Tempel beberapa link").fill("https://example.com/one\nhttps://example.com/two");
-  await page.getByRole("button", { name: "Analisis semua" }).click();
+  await page.getByRole("button", { name: "Analisis", exact: true }).click();
 
   await expect(page.locator(".batch-item")).toHaveCount(2);
   const choiceAppearance = await page.locator(".batch-choice").first().evaluate(element => ({
@@ -289,7 +314,7 @@ test("antrean panjang menampilkan peringatan dan tombol antrean berikutnya berfu
 
   await page.getByRole("tab", { name: "Beberapa link" }).click();
   await page.getByLabel("Tempel beberapa link").fill(urls);
-  await page.getByRole("button", { name: "Analisis semua" }).click();
+  await page.getByRole("button", { name: "Analisis", exact: true }).click();
 
   await expect(page.locator(".batch-item")).toHaveCount(30);
   await expect(page.getByText("30 media akan diproses secara bertahap.", { exact: false })).toBeVisible();

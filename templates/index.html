@@ -142,6 +142,38 @@
       transform: rotate(2deg);
     }
 
+    .topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .language-switch {
+      display: inline-flex;
+      padding: 3px;
+      background: var(--ink);
+      border: 1.5px solid var(--ink);
+      border-radius: 999px;
+    }
+
+    .language-button {
+      display: grid;
+      place-items: center;
+      min-width: 44px;
+      min-height: 44px;
+      padding: 0 10px;
+      color: #fff;
+      background: transparent;
+      border: 0;
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 850;
+      letter-spacing: .05em;
+    }
+
+    .language-button.active { color: var(--ink); background: var(--sun); }
+
     .hero {
       display: grid;
       grid-template-columns: minmax(0, 1.35fr) minmax(300px, .65fr);
@@ -347,8 +379,8 @@
       border: 0;
       border-radius: 999px;
       cursor: pointer;
-      font-size: 13px;
-      font-weight: 750;
+      font-size: 15px;
+      font-weight: 800;
     }
 
     .mode-button.active {
@@ -361,8 +393,6 @@
     .batch-panel.visible { display: block; }
 
     .batch-input-shell {
-      display: grid;
-      gap: 10px;
       padding: 8px;
       background: white;
       border: 2px solid var(--ink);
@@ -388,10 +418,12 @@
       line-height: 1.55;
     }
 
+    .input-actions,
     .batch-input-actions {
       display: flex;
       justify-content: flex-end;
       gap: 8px;
+      margin-top: 12px;
     }
 
     .batch-message {
@@ -500,9 +532,6 @@
     }
 
     .input-shell {
-      display: grid;
-      grid-template-columns: 1fr auto auto;
-      gap: 10px;
       padding: 8px;
       background: white;
       border: 2px solid var(--ink);
@@ -516,6 +545,7 @@
     }
 
     .url-input {
+      width: 100%;
       min-width: 0;
       padding: 13px 12px;
       color: var(--ink);
@@ -766,14 +796,14 @@
     .progress-cancel {
       display: none;
       flex: 0 0 auto;
-      min-height: 42px;
+      min-height: 44px;
       padding: 0 15px;
       color: #8d2323;
       background: transparent;
       border: 1px solid #dfaaa5;
       border-radius: 9px;
       cursor: pointer;
-      font-size: 11px;
+      font-size: 14px;
       font-weight: 750;
     }
 
@@ -790,7 +820,7 @@
 
     .progress-save {
       display: none;
-      min-height: 42px;
+      min-height: 44px;
       padding: 0 16px;
       color: #fff;
       background: var(--signal);
@@ -798,7 +828,7 @@
       border-radius: 9px;
       cursor: pointer;
       text-decoration: none;
-      font-size: 11px;
+      font-size: 14px;
       font-weight: 800;
     }
 
@@ -832,6 +862,77 @@
     .save-dialog-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 22px; }
     .save-dialog-actions .button { min-height: 46px; }
 
+    .platform-marquee { margin-top: 72px; overflow: hidden; }
+
+    .platform-marquee-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    .platform-marquee-head h2 {
+      margin: 0;
+      font-size: clamp(24px, 3vw, 36px);
+      line-height: 1;
+      letter-spacing: -.045em;
+    }
+
+    .platform-marquee-head span {
+      flex: 0 0 auto;
+      padding: 7px 11px;
+      color: var(--ink);
+      background: var(--sun);
+      border: 1.5px solid var(--ink);
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 850;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      transform: rotate(-1deg);
+    }
+
+    .platform-marquee-window {
+      overflow: hidden;
+      padding: 4px 0 10px;
+      -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+      mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+    }
+
+    .platform-marquee-track {
+      display: flex;
+      width: max-content;
+      animation: platform-scroll 32s linear infinite;
+    }
+
+    .platform-marquee-window:hover .platform-marquee-track { animation-play-state: paused; }
+
+    .platform-logo-set {
+      display: flex;
+      flex: 0 0 auto;
+      gap: 12px;
+      padding-right: 12px;
+    }
+
+    .platform-logo {
+      display: inline-flex;
+      flex: 0 0 auto;
+      align-items: center;
+      gap: 9px;
+      min-height: 50px;
+      padding: 10px 17px;
+      color: var(--ink);
+      background: var(--panel-strong);
+      border: 1.5px solid var(--ink);
+      border-radius: 999px;
+      box-shadow: 3px 3px 0 rgba(16, 16, 16, .12);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .platform-logo img { width: 24px; height: 24px; object-fit: contain; }
+
     @keyframes ambient-drift { to { transform: translate3d(6vw, 4vw, 0) scale(1.08); } }
     @keyframes kicker-typing {
       0%, 14% { clip-path: inset(0 100% 0 0); }
@@ -842,6 +943,7 @@
     @keyframes rail-flow { to { background-position: 0 220%; } }
     @keyframes line-flow { 0%, 18% { transform: translateX(-100%); } 72%, 100% { transform: translateX(100%); } }
     @keyframes node-breathe { 50% { opacity: .18; transform: scale(1.12); } }
+    @keyframes platform-scroll { to { transform: translateX(-50%); } }
     @keyframes card-enter { from { opacity: 0; transform: translateY(10px); } }
     @keyframes result-reveal { from { opacity: 0; transform: translateY(10px); } }
     @keyframes dialog-in { from { opacity: 0; transform: translateY(14px); } }
@@ -866,15 +968,15 @@
       .topbar { margin-bottom: 42px; }
       .hero { grid-template-columns: 1fr; gap: 28px; }
       .transfer-visual { max-width: 520px; }
-      .input-shell { grid-template-columns: 1fr auto; }
-      .url-input { grid-column: 1 / -1; }
       .button-primary { flex: 1; }
       .result { grid-template-columns: 1fr; }
       .thumb-wrap { max-height: 250px; }
       .batch-toolbar { align-items: flex-start; flex-direction: column; }
-      .batch-input-actions { display: grid; grid-template-columns: 1fr 1fr; }
+      .input-actions, .batch-input-actions { display: grid; grid-template-columns: 1fr 1fr; }
       .batch-package { align-items: stretch; flex-direction: column; }
       .batch-package .button { width: 100%; }
+      .platform-marquee { margin-top: 52px; }
+      .platform-marquee-head { align-items: flex-start; flex-direction: column; }
     }
 
     @media (max-width: 460px) {
@@ -888,7 +990,7 @@
       .media-icon { left: -56px; width: 36px; height: 36px; padding: 6px; }
       .media-slip strong { font-size: 15px; }
       .card { padding: 15px; border-radius: 15px; }
-      .input-shell { gap: 8px; padding: 7px; }
+      .input-shell { padding: 7px; }
       .button { min-height: 48px; padding: 0 14px; }
       .choices { grid-template-columns: 1fr; }
       .helper { display: block; }
@@ -899,8 +1001,19 @@
       .progress-actions { justify-content: stretch; }
       .progress-actions button { flex: 1; justify-content: center; }
       .mode-switch { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+      .topbar { padding: 9px 11px; }
+      .topbar-actions { gap: 6px; }
+      .topbar-note { padding: 6px 7px; font-size: 8px; letter-spacing: .04em; }
+      .brand { gap: 6px; }
+      .brand-symbol { width: 20px; }
+      .brand-wordmark { width: 88px; }
+      .language-button { min-width: 44px; min-height: 44px; padding: 0 8px; }
       .batch-item { grid-template-columns: auto 46px minmax(0, 1fr); }
       .batch-thumb { width: 46px; height: 46px; }
+    }
+
+    @media (max-width: 340px) {
+      .topbar-note { display: none; }
     }
 
     @media (pointer: coarse) {
@@ -911,6 +1024,8 @@
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
       .kicker-type { clip-path: none; }
+      .platform-marquee-window { overflow-x: auto; -webkit-mask-image: none; mask-image: none; }
+      .platform-logo-set[aria-hidden="true"] { display: none; }
     }
   </style>
 </head>
@@ -921,65 +1036,73 @@
         <img class="brand-symbol" src="/static/mark.svg" alt="">
         <img class="brand-wordmark" src="/static/wordmark.svg" alt="">
       </div>
-      <span class="topbar-note">Media publik</span>
+      <div class="topbar-actions">
+        <span class="topbar-note" data-i18n="publicMedia">Media publik</span>
+        <div class="language-switch" role="group" aria-label="Pilihan bahasa" data-i18n-aria-label="languageChoice">
+          <button class="language-button active" type="button" data-language="id" aria-pressed="true">ID</button>
+          <button class="language-button" type="button" data-language="en" aria-pressed="false">EN</button>
+        </div>
+      </div>
     </header>
 
     <section class="hero">
       <div class="hero-copy">
-        <p class="kicker"><span class="kicker-type">Unduh media dengan kualitas real!</span></p>
-        <h1>Pilih kualitasnya. Simpan medianya.</h1>
-        <p class="lead">Tempel link dari platform favoritmu, lihat format dan perkiraan ukuran file, lalu unduh video, audio, atau foto yang kamu perlukan.</p>
-        <div class="platforms" aria-label="Platform populer">
+        <p class="kicker"><span class="kicker-type" data-i18n="kicker">Unduh media dengan kualitas real!</span></p>
+        <h1 data-i18n="heroTitle">Pilih kualitasnya. Simpan medianya.</h1>
+        <p class="lead" data-i18n="heroLead">Tempel link dari platform favoritmu, lihat format dan perkiraan ukuran file, lalu unduh video, audio, atau foto yang kamu perlukan.</p>
+        <div class="platforms" aria-label="Platform populer" data-i18n-aria-label="popularPlatforms">
           <span class="platform">YouTube</span>
           <span class="platform">Instagram</span>
           <span class="platform">TikTok</span>
           <span class="platform">X / Twitter</span>
           <span class="platform">Facebook</span>
-          <span class="platform">dan lainnya</span>
+          <span class="platform" data-i18n="andMore">dan lainnya</span>
         </div>
       </div>
       <div class="transfer-visual" aria-hidden="true">
         <div class="media-slip">
           <span class="media-icon"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="13" height="12" rx="3" stroke="currentColor" stroke-width="2.2"/><path d="m16 10 5-3v10l-5-3Z" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></svg></span>
-          <span class="media-label">Video</span><strong>Pilih resolusi hingga 4K</strong><i class="media-line"></i>
+          <span class="media-label">Video</span><strong data-i18n="videoFeature">Pilih resolusi hingga 4K</strong><i class="media-line"></i>
         </div>
         <div class="media-slip">
           <span class="media-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M9 18V6l10-2v12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="18" r="3" stroke="currentColor" stroke-width="2.2"/><circle cx="16" cy="16" r="3" stroke="currentColor" stroke-width="2.2"/></svg></span>
-          <span class="media-label">Audio</span><strong>MP3 hingga 320 kbps</strong><i class="media-line"></i>
+          <span class="media-label">Audio</span><strong data-i18n="audioFeature">MP3 hingga 320 kbps</strong><i class="media-line"></i>
         </div>
         <div class="media-slip">
           <span class="media-icon"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="3" stroke="currentColor" stroke-width="2.2"/><circle cx="16.5" cy="8.5" r="1.5" fill="currentColor"/><path d="m5.5 17 4.5-5 3.2 3 2-2 3.3 4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-          <span class="media-label">Foto</span><strong>Simpan file tanpa kompresi ulang</strong><i class="media-line"></i>
+          <span class="media-label" data-i18n="photo">Foto</span><strong data-i18n="photoFeature">Simpan file tanpa kompresi ulang</strong><i class="media-line"></i>
         </div>
       </div>
     </section>
 
     <section class="card">
-      <div class="mode-switch" role="tablist" aria-label="Jenis unduhan">
-        <button class="mode-button active" id="singleModeButton" type="button" role="tab" aria-selected="true" aria-controls="singlePanel">Satu link</button>
-        <button class="mode-button" id="batchModeButton" type="button" role="tab" aria-selected="false" aria-controls="batchPanel">Beberapa link</button>
+      <div class="mode-switch" role="tablist" aria-label="Jenis unduhan" data-i18n-aria-label="downloadType">
+        <button class="mode-button active" id="singleModeButton" type="button" role="tab" aria-selected="true" aria-controls="singlePanel" data-i18n="singleLink">Satu link</button>
+        <button class="mode-button" id="batchModeButton" type="button" role="tab" aria-selected="false" aria-controls="batchPanel" data-i18n="multipleLinks">Beberapa link</button>
       </div>
 
       <div id="singlePanel" role="tabpanel" aria-labelledby="singleModeButton">
       <form id="analyzeForm">
-        <label class="input-label" for="urlInput">Tempel link media</label>
+        <label class="input-label" for="urlInput" data-i18n="pasteMediaLink">Tempel link media</label>
         <div class="input-shell">
           <input class="url-input" id="urlInput" type="url" inputmode="url" autocomplete="url" placeholder="https://..." required>
-          <button class="button button-quiet" id="pasteButton" type="button">Tempel</button>
-          <button class="button button-primary" id="analyzeButton" type="submit">Lihat pilihan</button>
+        </div>
+        <div class="input-actions">
+          <button class="button button-quiet" id="pasteButton" type="button" data-i18n="paste">Tempel</button>
+          <button class="button button-primary" id="analyzeButton" type="submit" data-i18n="viewOptions">Lihat pilihan</button>
         </div>
         <div class="helper">
-          <span>Mendukung konten publik dari platform yang kompatibel.</span>
-          <span>Batas file server: {{ max_file_mb }} MB</span>
+          <span data-i18n="publicSupport">Mendukung konten publik dari platform yang kompatibel.</span>
+          <span><span data-i18n="maxFile">Maks file</span>: {{ max_file_mb }} MB</span>
         </div>
       </form>
 
       <div class="notice" id="errorBox" role="alert"></div>
-      <div class="loading" id="loading"><span class="spinner"></span><span>Mencari kualitas dan format yang tersedia…</span></div>
+      <div class="loading" id="loading"><span class="spinner"></span><span data-i18n="findingFormats">Mencari kualitas dan format yang tersedia…</span></div>
 
       <div class="result" id="result">
         <div class="thumb-wrap">
-          <img class="thumb" id="thumbnail" alt="Pratinjau media">
+          <img class="thumb" id="thumbnail" alt="Pratinjau media" data-i18n-alt="mediaPreview">
           <span class="source" id="platform">Media</span>
         </div>
         <div>
@@ -988,7 +1111,7 @@
           <div class="tabs" id="tabs">
             <button class="tab" type="button" data-kind="video">Video</button>
             <button class="tab" type="button" data-kind="audio">Audio</button>
-            <button class="tab" type="button" data-kind="photo">Foto</button>
+            <button class="tab" type="button" data-kind="photo" data-i18n="photo">Foto</button>
           </div>
           <div class="choices" id="choices"></div>
         </div>
@@ -997,46 +1120,83 @@
 
       <div class="batch-panel" id="batchPanel" role="tabpanel" aria-labelledby="batchModeButton">
         <form id="batchForm">
-          <label class="input-label" for="batchInput">Tempel beberapa link</label>
+          <label class="input-label" for="batchInput" data-i18n="pasteMultipleLinks">Tempel beberapa link</label>
           <div class="batch-input-shell">
-            <textarea class="batch-textarea" id="batchInput" inputmode="url" placeholder="Satu link per baris" required></textarea>
-            <div class="batch-input-actions">
-              <button class="button button-quiet" id="batchPasteButton" type="button">Tempel</button>
-              <button class="button button-primary" id="batchAnalyzeButton" type="submit">Analisis semua</button>
-            </div>
+            <textarea class="batch-textarea" id="batchInput" inputmode="url" placeholder="Satu link per baris" data-i18n-placeholder="oneLinkPerLine" required></textarea>
+          </div>
+          <div class="batch-input-actions">
+            <button class="button button-quiet" id="batchPasteButton" type="button" data-i18n="paste">Tempel</button>
+            <button class="button button-primary" id="batchAnalyzeButton" type="submit" data-i18n="analyze">Analisis</button>
           </div>
           <div class="helper">
-            <span>Maksimal {{ max_batch_items }} media per paket. Link selebihnya masuk antrean berikutnya.</span>
-            <span>Batas aman paket: {{ (batch_limit_bytes / 1024 / 1024) | round | int }} MB</span>
+            <span><span data-i18n="maxMediaPerPackage">Maksimal {{ max_batch_items }} media per paket. Link selebihnya masuk antrean berikutnya.</span></span>
+            <span><span data-i18n="maxFile">Maks file</span>: {{ max_file_mb }} MB</span>
           </div>
         </form>
 
         <div class="batch-message" id="batchMessage" role="status"></div>
         <div class="batch-toolbar" id="batchToolbar">
           <div>
-            <strong id="batchSummary">Belum ada media dipilih</strong>
-            <span id="batchSummaryDetail">Pilih media dan kualitas yang ingin diunduh.</span>
+            <strong id="batchSummary" data-i18n="noMediaSelected">Belum ada media dipilih</strong>
+            <span id="batchSummaryDetail" data-i18n="selectMediaQuality">Pilih media dan kualitas yang ingin diunduh.</span>
           </div>
           <div>
-            <button class="button button-quiet" id="batchSelectAll" type="button">Batalkan semua pilihan</button>
+            <button class="button button-quiet" id="batchSelectAll" type="button" data-i18n="clearAll">Batalkan semua pilihan</button>
           </div>
         </div>
         <div class="batch-list" id="batchList"></div>
         <div class="batch-packages" id="batchPackages"></div>
-        <button class="button button-quiet" id="batchContinue" type="button" hidden>Analisis antrean berikutnya</button>
+        <button class="button button-quiet" id="batchContinue" type="button" hidden data-i18n="analyzeNextQueue">Analisis antrean berikutnya</button>
       </div>
 
-      <div class="download-progress" id="downloadProgress" role="progressbar" aria-label="Progres unduhan" aria-live="polite" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+      <div class="download-progress" id="downloadProgress" role="progressbar" aria-label="Progres unduhan" data-i18n-aria-label="downloadProgress" aria-live="polite" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
         <div class="progress-head">
-          <span class="progress-stage" id="progressStage">Menyiapkan unduhan</span>
+          <span class="progress-stage" id="progressStage" data-i18n="preparingDownload">Menyiapkan unduhan</span>
           <span class="progress-percent" id="progressPercent">0%</span>
         </div>
         <div class="progress-track"><div class="progress-bar" id="progressBar"></div></div>
         <div class="progress-foot">
-          <p class="progress-detail" id="progressDetail">Jangan tutup halaman sampai file tersimpan.</p>
+          <p class="progress-detail" id="progressDetail" data-i18n="keepPageOpen">Jangan tutup halaman sampai file tersimpan.</p>
           <div class="progress-actions">
-            <button class="progress-cancel" id="cancelDownload" type="button">Batalkan</button>
-            <button class="progress-save" id="saveDownload" type="button">Simpan ke perangkat</button>
+            <button class="progress-cancel" id="cancelDownload" type="button" data-i18n="cancel">Batalkan</button>
+            <button class="progress-save" id="saveDownload" type="button" data-i18n="saveToDevice">Simpan ke perangkat</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    {% set platform_logos = [
+      ('youtube', 'FF0000', 'YouTube'),
+      ('instagram', 'E4405F', 'Instagram'),
+      ('tiktok', '000000', 'TikTok'),
+      ('x', '000000', 'X / Twitter'),
+      ('facebook', '0866FF', 'Facebook'),
+      ('vimeo', '1AB7EA', 'Vimeo'),
+      ('reddit', 'FF4500', 'Reddit'),
+      ('soundcloud', 'FF5500', 'SoundCloud'),
+      ('twitch', '9146FF', 'Twitch'),
+      ('dailymotion', '0A0A0A', 'Dailymotion'),
+      ('rumble', '85C742', 'Rumble'),
+      ('dropbox', '0061FF', 'Dropbox'),
+      ('bandcamp', '1DA0C3', 'Bandcamp'),
+      ('ted', 'E62B1E', 'TED')
+    ] %}
+    <section class="platform-marquee" aria-labelledby="platformMarqueeTitle">
+      <div class="platform-marquee-head">
+        <span data-i18n="popularPlatforms">Platform populer</span>
+        <h2 id="platformMarqueeTitle" data-i18n="platformMarqueeTitle">Satu tempat untuk link favoritmu.</h2>
+      </div>
+      <div class="platform-marquee-window">
+        <div class="platform-marquee-track">
+          <div class="platform-logo-set">
+            {% for slug, color, label in platform_logos %}
+            <span class="platform-logo"><img src="https://cdn.simpleicons.org/{{ slug }}/{{ color }}" alt="" width="24" height="24" loading="lazy" decoding="async"><span>{{ label }}</span></span>
+            {% endfor %}
+          </div>
+          <div class="platform-logo-set" aria-hidden="true">
+            {% for slug, color, label in platform_logos %}
+            <span class="platform-logo"><img src="https://cdn.simpleicons.org/{{ slug }}/{{ color }}" alt="" width="24" height="24" loading="lazy" decoding="async"><span>{{ label }}</span></span>
+            {% endfor %}
           </div>
         </div>
       </div>
@@ -1045,19 +1205,19 @@
     <dialog class="save-dialog" id="saveDialog" aria-labelledby="saveDialogTitle" aria-describedby="saveDialogDetail">
       <div class="save-dialog-body">
         <div class="save-dialog-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3v11m0 0-4-4m4 4 4-4M5 18h14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"/></svg></div>
-        <h2 id="saveDialogTitle">File siap disimpan</h2>
-        <p id="saveDialogDetail">Pilih tempat penyimpanan agar file tetap tersedia di perangkat Anda.</p>
-        <label class="save-file-label" for="saveDialogFilename">Nama file</label>
+        <h2 id="saveDialogTitle" data-i18n="fileReady">File siap disimpan</h2>
+        <p id="saveDialogDetail" data-i18n="chooseStorage">Pilih tempat penyimpanan agar file tetap tersedia di perangkat Anda.</p>
+        <label class="save-file-label" for="saveDialogFilename" data-i18n="filename">Nama file</label>
         <input class="save-file-name" id="saveDialogFilename" type="text" autocomplete="off" spellcheck="false" aria-describedby="saveFilenameNote">
-        <p class="save-file-note" id="saveFilenameNote">Ekstensi asli akan dipertahankan.</p>
+        <p class="save-file-note" id="saveFilenameNote" data-i18n="keepExtension">Ekstensi asli akan dipertahankan.</p>
         <div class="save-dialog-actions">
-          <button class="button button-quiet" id="closeSaveDialog" type="button">Nanti saja</button>
-          <button class="button button-primary" id="confirmSaveDownload" type="button">Simpan sekarang</button>
+          <button class="button button-quiet" id="closeSaveDialog" type="button" data-i18n="later">Nanti saja</button>
+          <button class="button button-primary" id="confirmSaveDownload" type="button" data-i18n="saveNow">Simpan sekarang</button>
         </div>
       </div>
     </dialog>
 
-    <footer>Gunakan hanya untuk konten milik sendiri, berlisensi, atau yang Anda punya izin untuk mengunduh. Patuhi hak cipta dan ketentuan platform.</footer>
+    <footer data-i18n="legal">Gunakan hanya untuk konten milik sendiri, berlisensi, atau yang Anda punya izin untuk mengunduh. Patuhi hak cipta dan ketentuan platform.</footer>
   </main>
 
   <script>
@@ -1100,6 +1260,61 @@
     const batchTargetBytes = Math.floor(batchLimitBytes * .8);
     const batchWarningItems = {{ batch_warning_items }};
     const maxBatchItems = {{ max_batch_items }};
+    const translations = {
+      id: {
+        publicMedia: "Media publik", languageChoice: "Pilihan bahasa", kicker: "Unduh media dengan kualitas real!",
+        heroTitle: "Pilih kualitasnya. Simpan medianya.", heroLead: "Tempel link dari platform favoritmu, lihat format dan perkiraan ukuran file, lalu unduh video, audio, atau foto yang kamu perlukan.",
+        popularPlatforms: "Platform populer", andMore: "dan lainnya", videoFeature: "Pilih resolusi hingga 4K", audioFeature: "MP3 hingga 320 kbps", photo: "Foto", photoFeature: "Simpan file tanpa kompresi ulang",
+        downloadType: "Jenis unduhan", singleLink: "Satu link", multipleLinks: "Beberapa link", pasteMediaLink: "Tempel link media", paste: "Tempel", viewOptions: "Lihat pilihan",
+        publicSupport: "Mendukung konten publik dari platform yang kompatibel.", maxFile: "Maks file", findingFormats: "Mencari kualitas dan format yang tersedia…", mediaPreview: "Pratinjau media",
+        pasteMultipleLinks: "Tempel beberapa link", oneLinkPerLine: "Satu link per baris", analyze: "Analisis", maxMediaPerPackage: "Maksimal {{ max_batch_items }} media per paket. Link selebihnya masuk antrean berikutnya.",
+        noMediaSelected: "Belum ada media dipilih", selectMediaQuality: "Pilih media dan kualitas yang ingin diunduh.", clearAll: "Batalkan semua pilihan", analyzeNextQueue: "Analisis antrean berikutnya",
+        downloadProgress: "Progres unduhan", preparingDownload: "Menyiapkan unduhan", keepPageOpen: "Jangan tutup halaman sampai file tersimpan.", cancel: "Batalkan", saveToDevice: "Simpan ke perangkat",
+        platformMarqueeTitle: "Satu tempat untuk link favoritmu.", fileReady: "File siap disimpan", chooseStorage: "Pilih tempat penyimpanan agar file tetap tersedia di perangkat Anda.", filename: "Nama file",
+        keepExtension: "Ekstensi asli akan dipertahankan.", later: "Nanti saja", saveNow: "Simpan sekarang", legal: "Gunakan hanya untuk konten milik sendiri, berlisensi, atau yang Anda punya izin untuk mengunduh. Patuhi hak cipta dan ketentuan platform.",
+        downloadFailed: "Unduhan gagal", mediaFile: "File media", fileSaved: "File tersimpan", savedToDevice: "{filename} berhasil disimpan ke perangkat.", saveCancelled: "Penyimpanan dibatalkan. Tekan tombol simpan untuk mencoba lagi.",
+        saveMenuOpened: "Menu simpan dibuka", chooseSaveToFiles: "Pilih “Simpan ke File” untuk menyelesaikan penyimpanan.", menuClosed: "Menu ditutup. Tekan tombol simpan untuk mencoba lagi.",
+        saveStarted: "Penyimpanan dimulai", previewSaveHint: "Jika pratinjau terbuka, gunakan menu Bagikan lalu pilih “Simpan ke File”.", preparingChoice: "Menyiapkan {label}", connecting: "Menghubungi server…",
+        cannotStart: "Unduhan tidak dapat dimulai.", noStreaming: "Browser tidak mendukung progres unduhan streaming.", temporaryStorage: "penyimpanan sementara perangkat", browserMemory: "memori browser",
+        sendingFile: "Mengirim file ke browser", bytesFrom: "{received} dari {total}", missingMetadata: "Metadata file tidak diterima dengan benar.", processingFailed: "Unduhan gagal diproses.", connectionLost: "Koneksi terputus sebelum unduhan selesai.",
+        pressSave: "Tekan “Simpan ke perangkat” untuk menyimpan {filename}.", downloadCancelled: "Unduhan dibatalkan.", downloadError: "Terjadi kesalahan saat mengunduh.", formatReady: "Format siap dipilih",
+        video: "Video", audio: "Audio", package: "Paket {number} · {count} media", unknownSize: " + {count} ukuran belum diketahui", downloadZip: "Unduh sebagai ZIP", downloadPackage: "Unduh paket {number}",
+        selectedCount: "{selected} dari {ready} media dipilih", estimate: "Perkiraan {size}{unknown}", selectAll: "Pilih semua", processingGradually: "{count} media akan diproses secara bertahap.",
+        largestPackage: "Paket terbesar memakai sekitar {percent}% batas penyimpanan aman.", splitPackages: "Unduhan dibagi menjadi {count} paket ZIP agar tiap paket tetap aman (maks. {max}). Total: {total}.",
+        unknownActual: "{count} media belum melaporkan ukuran; batas aktual tetap diperiksa saat mengunduh.", failedLinks: "{count} link gagal dianalisis dan tidak akan menghentikan media lainnya.", oversized: "Ada paket yang melewati batas aman. Kurangi kualitas atau pilihan media.",
+        selectMedia: "Pilih media {number}", readyToChoose: "siap dipilih", analyzing: "Sedang menganalisis…", waiting: "Menunggu…", analyzingButton: "Menganalisis…",
+        cannotProcess: "Link tidak dapat diproses.", noFormat: "Tidak ada format yang dapat diunduh.", analyzeNext: "Analisis {count} link berikutnya", validLink: "Masukkan setidaknya satu link HTTP/HTTPS yang valid.",
+        savePackageFirst: "Simpan paket yang sudah siap sebelum menyiapkan paket berikutnya.", packageLabel: "paket {number}", packageReady: "Paket siap disimpan", checking: "Memeriksa…", genericError: "Terjadi kesalahan. Silakan coba lagi.",
+        detectedLinks: "{count} link terdeteksi. Periksa daftar lalu tekan “Analisis”.", clipboardDenied: "Browser tidak memberi izin membaca clipboard. Tempel link secara manual."
+      },
+      en: {
+        publicMedia: "Public media", languageChoice: "Language selection", kicker: "Download media in its real quality!",
+        heroTitle: "Choose the quality. Save the media.", heroLead: "Paste a link from your favorite platform, review its formats and estimated file size, then download the video, audio, or photo you need.",
+        popularPlatforms: "Popular platforms", andMore: "and more", videoFeature: "Choose resolutions up to 4K", audioFeature: "MP3 up to 320 kbps", photo: "Photo", photoFeature: "Save files without recompression",
+        downloadType: "Download type", singleLink: "Single link", multipleLinks: "Multiple links", pasteMediaLink: "Paste a media link", paste: "Paste", viewOptions: "View options",
+        publicSupport: "Supports public content from compatible platforms.", maxFile: "Max file", findingFormats: "Finding available quality and formats…", mediaPreview: "Media preview",
+        pasteMultipleLinks: "Paste multiple links", oneLinkPerLine: "One link per line", analyze: "Analyze", maxMediaPerPackage: "Up to {{ max_batch_items }} media per package. Extra links move to the next queue.",
+        noMediaSelected: "No media selected", selectMediaQuality: "Select the media and quality you want to download.", clearAll: "Clear all", analyzeNextQueue: "Analyze the next queue",
+        downloadProgress: "Download progress", preparingDownload: "Preparing download", keepPageOpen: "Keep this page open until the file is saved.", cancel: "Cancel", saveToDevice: "Save to device",
+        platformMarqueeTitle: "One place for your favorite links.", fileReady: "File ready to save", chooseStorage: "Choose a save location to keep the file available on your device.", filename: "File name",
+        keepExtension: "The original extension will be preserved.", later: "Later", saveNow: "Save now", legal: "Use only for content you own, that is licensed, or that you have permission to download. Follow copyright laws and platform terms.",
+        downloadFailed: "Download failed", mediaFile: "Media file", fileSaved: "File saved", savedToDevice: "{filename} was saved to your device.", saveCancelled: "Saving was cancelled. Press save to try again.",
+        saveMenuOpened: "Save menu opened", chooseSaveToFiles: "Choose “Save to Files” to finish saving.", menuClosed: "The menu was closed. Press save to try again.",
+        saveStarted: "Saving started", previewSaveHint: "If a preview opens, use Share and choose “Save to Files”.", preparingChoice: "Preparing {label}", connecting: "Connecting to the server…",
+        cannotStart: "The download could not be started.", noStreaming: "This browser does not support streaming download progress.", temporaryStorage: "temporary device storage", browserMemory: "browser memory",
+        sendingFile: "Sending file to browser", bytesFrom: "{received} of {total}", missingMetadata: "File metadata was not received correctly.", processingFailed: "The download could not be processed.", connectionLost: "The connection ended before the download was complete.",
+        pressSave: "Press “Save to device” to save {filename}.", downloadCancelled: "Download cancelled.", downloadError: "An error occurred while downloading.", formatReady: "Formats ready to choose",
+        video: "Video", audio: "Audio", package: "Package {number} · {count} media", unknownSize: " + {count} sizes unknown", downloadZip: "Download as ZIP", downloadPackage: "Download package {number}",
+        selectedCount: "{selected} of {ready} media selected", estimate: "Estimated {size}{unknown}", selectAll: "Select all", processingGradually: "{count} media will be processed in stages.",
+        largestPackage: "The largest package uses about {percent}% of the safe storage limit.", splitPackages: "The download is split into {count} ZIP packages to keep each package safe (max. {max}). Total: {total}.",
+        unknownActual: "{count} media did not report a size; the actual limit is still checked during download.", failedLinks: "{count} links could not be analyzed and will not stop the other media.", oversized: "A package exceeds the safe limit. Reduce the quality or selected media.",
+        selectMedia: "Select media {number}", readyToChoose: "ready to choose", analyzing: "Analyzing…", waiting: "Waiting…", analyzingButton: "Analyzing…",
+        cannotProcess: "The link could not be processed.", noFormat: "No downloadable format is available.", analyzeNext: "Analyze the next {count} links", validLink: "Enter at least one valid HTTP/HTTPS link.",
+        savePackageFirst: "Save the package that is ready before preparing the next one.", packageLabel: "package {number}", packageReady: "Package ready to save", checking: "Checking…", genericError: "Something went wrong. Please try again.",
+        detectedLinks: "{count} links detected. Review the list, then press “Analyze”.", clipboardDenied: "The browser did not allow clipboard access. Paste the link manually."
+      }
+    };
+    let currentLanguage = "id";
     let mediaData = null;
     let activeKind = "video";
     let downloadActive = false;
@@ -1109,6 +1324,30 @@
     let batchItems = [];
     let pendingBatchUrls = [];
     let currentBatchPackages = [];
+
+    function t(key, values = {}) {
+      return (translations[currentLanguage][key] || key).replace(/\{(\w+)\}/g, (_, name) => values[name] ?? "");
+    }
+
+    function applyLanguage(language) {
+      currentLanguage = translations[language] ? language : "id";
+      document.documentElement.lang = currentLanguage;
+      document.querySelectorAll("[data-i18n]").forEach(element => { element.textContent = t(element.dataset.i18n); });
+      document.querySelectorAll("[data-i18n-aria-label]").forEach(element => { element.setAttribute("aria-label", t(element.dataset.i18nAriaLabel)); });
+      document.querySelectorAll("[data-i18n-placeholder]").forEach(element => { element.placeholder = t(element.dataset.i18nPlaceholder); });
+      document.querySelectorAll("[data-i18n-alt]").forEach(element => { element.alt = t(element.dataset.i18nAlt); });
+      document.querySelectorAll("[data-language]").forEach(button => {
+        const active = button.dataset.language === currentLanguage;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-pressed", String(active));
+      });
+      try { localStorage.setItem("linkdrop-language", currentLanguage); } catch {}
+      if (batchItems.length) renderBatchItems();
+      if (mediaData) {
+        const metadata = [mediaData.uploader, formatDuration(mediaData.duration), mediaData.item_count > 1 ? `${mediaData.item_count} ${currentLanguage === "en" ? "items" : "item"}` : null].filter(Boolean);
+        document.getElementById("mediaMeta").textContent = metadata.join(" · ") || t("formatReady");
+      }
+    }
 
     function showError(message) {
       errorBox.textContent = message;
@@ -1191,12 +1430,12 @@
       progressBar.style.width = `${safePercent}%`;
       progressPercent.textContent = `${Math.round(safePercent)}%`;
       progressStage.textContent = stage;
-      progressDetail.textContent = detail || "Jangan tutup halaman sampai file tersimpan.";
+      progressDetail.textContent = detail || t("keepPageOpen");
     }
 
     function failDownloadProgress(message) {
       downloadProgress.classList.add("visible", "error");
-      progressStage.textContent = "Unduhan gagal";
+      progressStage.textContent = t("downloadFailed");
       progressDetail.textContent = message;
     }
 
@@ -1271,7 +1510,7 @@
           const handle = await window.showSaveFilePicker({
             suggestedName: filename,
             types: [{
-              description: "File media",
+              description: t("mediaFile"),
               accept: { [fileType]: [`.${filename.split(".").pop() || "bin"}`] }
             }]
           });
@@ -1279,12 +1518,12 @@
           await currentDownload.blob.stream().pipeTo(writable);
           currentDownload.saved = true;
           closeSaveDialog();
-          updateDownloadProgress(100, "File tersimpan", `${filename} berhasil disimpan ke perangkat.`);
+          updateDownloadProgress(100, t("fileSaved"), t("savedToDevice", { filename }));
           schedulePreparedDownloadCleanup(currentDownload);
           return;
         } catch (error) {
           if (error.name === "AbortError") {
-            updateDownloadProgress(100, "File siap disimpan", "Penyimpanan dibatalkan. Tekan tombol simpan untuk mencoba lagi.");
+            updateDownloadProgress(100, t("fileReady"), t("saveCancelled"));
             return;
           }
         }
@@ -1296,12 +1535,12 @@
           await navigator.share({ files: [sharedFile], title: filename });
           currentDownload.saved = true;
           closeSaveDialog();
-          updateDownloadProgress(100, "Menu simpan dibuka", "Pilih “Simpan ke File” untuk menyelesaikan penyimpanan.");
+          updateDownloadProgress(100, t("saveMenuOpened"), t("chooseSaveToFiles"));
           schedulePreparedDownloadCleanup(currentDownload);
           return;
         } catch (error) {
           if (error.name === "AbortError") {
-            updateDownloadProgress(100, "File siap disimpan", "Menu ditutup. Tekan tombol simpan untuk mencoba lagi.");
+            updateDownloadProgress(100, t("fileReady"), t("menuClosed"));
             return;
           }
         }
@@ -1319,8 +1558,8 @@
       closeSaveDialog();
       updateDownloadProgress(
         100,
-        "Penyimpanan dimulai",
-        "Jika pratinjau terbuka, gunakan menu Bagikan lalu pilih “Simpan ke File”."
+        t("saveStarted"),
+        t("previewSaveHint")
       );
       schedulePreparedDownloadCleanup(currentDownload);
     }
@@ -1382,7 +1621,7 @@
       batchAnalyzeButton.disabled = true;
       singleModeButton.disabled = true;
       batchModeButton.disabled = true;
-      updateDownloadProgress(0, `Menyiapkan ${choice.label}`, "Menghubungi server…");
+      updateDownloadProgress(0, t("preparingChoice", { label: choice.label }), t("connecting"));
 
       let metadata = null;
       let receivedFileBytes = 0;
@@ -1397,14 +1636,14 @@
         });
         const contentType = response.headers.get("content-type") || "";
         if (!response.ok || !contentType.includes("application/vnd.linkdrop.progress")) {
-          let message = "Unduhan tidak dapat dimulai.";
+          let message = t("cannotStart");
           try {
             const payload = await response.json();
             message = payload.error || message;
           } catch {}
           throw new Error(message);
         }
-        if (!response.body) throw new Error("Browser tidak mendukung progres unduhan streaming.");
+        if (!response.body) throw new Error(t("noStreaming"));
 
         const reader = response.body.getReader();
         let pending = new Uint8Array(0);
@@ -1433,20 +1672,20 @@
               metadata = decodeJson(payload);
               receivedFileBytes = 0;
               downloadSink = await createDownloadSink(metadata);
-              const storageLabel = downloadSink.mode === "device" ? "penyimpanan sementara perangkat" : "memori browser";
-              updateDownloadProgress(92, "Mengirim file ke browser", `0 B dari ${prettyBytes(metadata.size)} · ${storageLabel}`);
+              const storageLabel = downloadSink.mode === "device" ? t("temporaryStorage") : t("browserMemory");
+              updateDownloadProgress(92, t("sendingFile"), `${t("bytesFrom", { received: "0 B", total: prettyBytes(metadata.size) })} · ${storageLabel}`);
             } else if (frameType === "D") {
-              if (!downloadSink) throw new Error("Metadata file tidak diterima dengan benar.");
+              if (!downloadSink) throw new Error(t("missingMetadata"));
               await downloadSink.write(payload);
               receivedFileBytes += payload.length;
               const fraction = metadata?.size ? receivedFileBytes / metadata.size : 0;
               updateDownloadProgress(
                 92 + Math.min(fraction, 1) * 8,
-                "Mengirim file ke browser",
-                `${prettyBytes(receivedFileBytes)} dari ${prettyBytes(metadata?.size)}`
+                t("sendingFile"),
+                t("bytesFrom", { received: prettyBytes(receivedFileBytes), total: prettyBytes(metadata?.size) })
               );
             } else if (frameType === "E") {
-              throw new Error(decodeJson(payload).error || "Unduhan gagal diproses.");
+              throw new Error(decodeJson(payload).error || t("processingFailed"));
             } else if (frameType === "C") {
               completed = true;
             }
@@ -1454,20 +1693,20 @@
           pending = buffer.slice(offset);
         }
 
-        if (!completed || !metadata) throw new Error("Koneksi terputus sebelum unduhan selesai.");
+        if (!completed || !metadata) throw new Error(t("connectionLost"));
         const savedFile = await downloadSink.finish();
         downloadSink = null;
         prepareDownloadForSaving(savedFile, metadata);
         updateDownloadProgress(
           100,
-          "File siap disimpan",
-          `Tekan “Simpan ke perangkat” untuk menyimpan ${metadata.filename}.`
+          t("fileReady"),
+          t("pressSave", { filename: metadata.filename })
         );
         requestConfig.onPrepared?.(metadata);
       } catch (error) {
         if (downloadSink) await downloadSink.discard();
         const wasCancelled = error.name === "AbortError";
-        const message = wasCancelled ? "Unduhan dibatalkan." : (error.message || "Terjadi kesalahan saat mengunduh.");
+        const message = wasCancelled ? t("downloadCancelled") : (error.message || t("downloadError"));
         failDownloadProgress(message);
         if (!wasCancelled) {
           if (batchPanel.classList.contains("visible")) showBatchMessage(message, true);
@@ -1521,8 +1760,8 @@
       document.getElementById("platform").textContent = data.platform || "Media";
       document.getElementById("mediaTitle").textContent = data.title;
 
-      const metadata = [data.uploader, formatDuration(data.duration), data.item_count > 1 ? `${data.item_count} item` : null].filter(Boolean);
-      document.getElementById("mediaMeta").textContent = metadata.join(" · ") || "Format siap dipilih";
+      const metadata = [data.uploader, formatDuration(data.duration), data.item_count > 1 ? `${data.item_count} ${currentLanguage === "en" ? "items" : "item"}` : null].filter(Boolean);
+      document.getElementById("mediaMeta").textContent = metadata.join(" · ") || t("formatReady");
 
       const kinds = availableKinds();
       document.querySelectorAll(".tab").forEach(tab => {
@@ -1536,7 +1775,7 @@
     }
 
     function choicesForMedia(data) {
-      const kindLabels = { video: "Video", audio: "Audio", photo: "Foto" };
+      const kindLabels = { video: t("video"), audio: t("audio"), photo: t("photo") };
       return ["video", "audio", "photo"].flatMap(kind =>
         (data.choices?.[kind] || []).map(choice => ({
           ...choice,
@@ -1591,11 +1830,11 @@
         const row = document.createElement("div");
         row.className = "batch-package";
         row.innerHTML = "<div><strong></strong><span></span></div><button class=\"button button-primary\" type=\"button\"></button>";
-        row.querySelector("strong").textContent = `Paket ${index + 1} · ${batchPackage.items.length} media`;
-        const unknownLabel = batchPackage.unknown ? ` + ${batchPackage.unknown} ukuran belum diketahui` : "";
+        row.querySelector("strong").textContent = t("package", { number: index + 1, count: batchPackage.items.length });
+        const unknownLabel = batchPackage.unknown ? t("unknownSize", { count: batchPackage.unknown }) : "";
         row.querySelector("span").textContent = `${prettyBytes(batchPackage.estimatedBytes)}${unknownLabel}`;
         const button = row.querySelector("button");
-        button.textContent = packages.length === 1 ? "Unduh sebagai ZIP" : `Unduh paket ${index + 1}`;
+        button.textContent = packages.length === 1 ? t("downloadZip") : t("downloadPackage", { number: index + 1 });
         button.disabled = batchPackage.estimatedBytes > batchLimitBytes;
         button.addEventListener("click", () => startBatchPackage(batchPackage, index + 1, button));
         batchPackages.appendChild(row);
@@ -1614,13 +1853,13 @@
       currentBatchPackages = planBatchPackages(selected);
       const oversizedPackage = currentBatchPackages.some(batchPackage => batchPackage.estimatedBytes > batchLimitBytes);
       batchToolbar.classList.toggle("visible", Boolean(batchItems.length));
-      batchSummary.textContent = `${selected.length} dari ${ready.length} media dipilih`;
+      batchSummary.textContent = t("selectedCount", { selected: selected.length, ready: ready.length });
       batchSummaryDetail.textContent = selected.length
-        ? `Perkiraan ${prettyBytes(estimatedBytes)}${unknown ? ` + ${unknown} ukuran belum diketahui` : ""}`
-        : "Pilih media dan kualitas yang ingin diunduh.";
+        ? t("estimate", { size: prettyBytes(estimatedBytes), unknown: unknown ? t("unknownSize", { count: unknown }) : "" })
+        : t("selectMediaQuality");
       batchSelectAll.textContent = ready.length && ready.every(item => item.selected)
-        ? "Batalkan semua pilihan"
-        : "Pilih semua";
+        ? t("clearAll")
+        : t("selectAll");
       renderBatchPackages(currentBatchPackages);
 
       const messages = [];
@@ -1628,15 +1867,15 @@
         (largest, batchPackage) => Math.max(largest, batchPackage.estimatedBytes / batchLimitBytes),
         0
       );
-      if (selected.length > batchWarningItems) messages.push(`${selected.length} media akan diproses secara bertahap.`);
-      if (largestPackageRatio >= .6) messages.push(`Paket terbesar memakai sekitar ${Math.round(largestPackageRatio * 100)}% batas penyimpanan aman.`);
+      if (selected.length > batchWarningItems) messages.push(t("processingGradually", { count: selected.length }));
+      if (largestPackageRatio >= .6) messages.push(t("largestPackage", { percent: Math.round(largestPackageRatio * 100) }));
       if (currentBatchPackages.length > 1) {
-        const totalLabel = `${prettyBytes(estimatedBytes)}${unknown ? ` + ${unknown} ukuran belum diketahui` : ""}`;
-        messages.push(`Unduhan dibagi menjadi ${currentBatchPackages.length} paket ZIP agar tiap paket tetap aman (maks. ${prettyBytes(batchTargetBytes)}). Total: ${totalLabel}.`);
+        const totalLabel = `${prettyBytes(estimatedBytes)}${unknown ? t("unknownSize", { count: unknown }) : ""}`;
+        messages.push(t("splitPackages", { count: currentBatchPackages.length, max: prettyBytes(batchTargetBytes), total: totalLabel }));
       }
-      if (unknown && currentBatchPackages.length <= 1) messages.push(`${unknown} media belum melaporkan ukuran; batas aktual tetap diperiksa saat mengunduh.`);
-      if (failed) messages.push(`${failed} link gagal dianalisis dan tidak akan menghentikan media lainnya.`);
-      if (oversizedPackage) messages.push("Ada paket yang melewati batas aman. Kurangi kualitas atau pilihan media.");
+      if (unknown && currentBatchPackages.length <= 1) messages.push(t("unknownActual", { count: unknown }));
+      if (failed) messages.push(t("failedLinks", { count: failed }));
+      if (oversizedPackage) messages.push(t("oversized"));
       showBatchMessage(messages.join(" "), oversizedPackage);
     }
 
@@ -1651,7 +1890,7 @@
         const title = card.querySelector(".batch-item-title");
         const meta = card.querySelector(".batch-item-meta");
         const select = card.querySelector(".batch-choice");
-        checkbox.setAttribute("aria-label", `Pilih media ${index + 1}`);
+        checkbox.setAttribute("aria-label", t("selectMedia", { number: index + 1 }));
         checkbox.checked = Boolean(item.selected);
         checkbox.disabled = item.status !== "ready";
         thumbnail.src = item.data?.thumbnail || "/static/icon.svg";
@@ -1659,8 +1898,8 @@
         meta.textContent = item.status === "error"
           ? item.error
           : item.status === "ready"
-            ? `${item.data.platform || "Media"} · siap dipilih`
-            : item.status === "analyzing" ? "Sedang menganalisis…" : "Menunggu…";
+            ? `${item.data.platform || "Media"} · ${t("readyToChoose")}`
+            : item.status === "analyzing" ? t("analyzing") : t("waiting");
         select.hidden = item.status !== "ready";
         item.choices.forEach((choice, choiceIndex) => {
           const option = document.createElement("option");
@@ -1695,7 +1934,7 @@
       batchItems.push(...items);
       renderBatchItems();
       batchAnalyzeButton.disabled = true;
-      batchAnalyzeButton.textContent = "Menganalisis…";
+      batchAnalyzeButton.textContent = t("analyzingButton");
       let cursor = 0;
 
       async function worker() {
@@ -1710,16 +1949,16 @@
               body: JSON.stringify({ url: item.url })
             });
             const data = await response.json();
-            if (!response.ok) throw new Error(data.error || "Link tidak dapat diproses.");
+            if (!response.ok) throw new Error(data.error || t("cannotProcess"));
             item.data = data;
             item.choices = choicesForMedia(data);
             item.choiceIndex = defaultBatchChoice(item.choices);
-            if (item.choiceIndex < 0) throw new Error("Tidak ada format yang dapat diunduh.");
+            if (item.choiceIndex < 0) throw new Error(t("noFormat"));
             item.selected = true;
             item.status = "ready";
           } catch (error) {
             item.status = "error";
-            item.error = error.message || "Link tidak dapat diproses.";
+            item.error = error.message || t("cannotProcess");
           }
           renderBatchItems();
         }
@@ -1727,10 +1966,10 @@
 
       await Promise.all([worker(), worker()]);
       batchAnalyzeButton.disabled = false;
-      batchAnalyzeButton.textContent = "Analisis semua";
+      batchAnalyzeButton.textContent = t("analyze");
       batchContinue.hidden = !pendingBatchUrls.length;
       if (pendingBatchUrls.length) {
-        batchContinue.textContent = `Analisis ${Math.min(maxBatchItems, pendingBatchUrls.length)} link berikutnya`;
+        batchContinue.textContent = t("analyzeNext", { count: Math.min(maxBatchItems, pendingBatchUrls.length) });
       }
       renderBatchItems();
     }
@@ -1739,7 +1978,7 @@
       event.preventDefault();
       const urls = parseBatchUrls(batchInput.value);
       if (!urls.length) {
-        showBatchMessage("Masukkan setidaknya satu link HTTP/HTTPS yang valid.", true);
+        showBatchMessage(t("validLink"), true);
         return;
       }
       batchItems = [];
@@ -1752,12 +1991,12 @@
 
     async function startBatchPackage(batchPackage, packageNumber, button) {
       if (preparedDownload && !preparedDownload.saved) {
-        showBatchMessage("Simpan paket yang sudah siap sebelum menyiapkan paket berikutnya.", true);
+        showBatchMessage(t("savePackageFirst"), true);
         return;
       }
       const tokens = batchPackage.items.map(item => item.choices[item.choiceIndex].token);
       await startDownload(
-        { label: `paket ${packageNumber}` },
+        { label: t("packageLabel", { number: packageNumber }) },
         {
           url: "/api/batch/download?progress=1",
           options: {
@@ -1766,7 +2005,7 @@
             body: JSON.stringify({ tokens, package: packageNumber })
           },
           onPrepared: () => {
-            button.textContent = "Paket siap disimpan";
+            button.textContent = t("packageReady");
             button.disabled = true;
           }
         }
@@ -1779,7 +2018,7 @@
       result.style.display = "none";
       loading.style.display = "flex";
       analyzeButton.disabled = true;
-      analyzeButton.textContent = "Memeriksa…";
+      analyzeButton.textContent = t("checking");
 
       try {
         const response = await fetch("/api/info", {
@@ -1788,14 +2027,14 @@
           body: JSON.stringify({ url: input.value.trim() })
         });
         const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "Link tidak dapat diproses.");
+        if (!response.ok) throw new Error(data.error || t("cannotProcess"));
         renderResult(data);
       } catch (error) {
-        showError(error.message || "Terjadi kesalahan. Silakan coba lagi.");
+        showError(error.message || t("genericError"));
       } finally {
         loading.style.display = "none";
         analyzeButton.disabled = false;
-        analyzeButton.textContent = "Lihat pilihan";
+        analyzeButton.textContent = t("viewOptions");
       }
     }
 
@@ -1821,14 +2060,14 @@
         if (urls.length > 1) {
           batchInput.value = clipboard;
           setMode("batch");
-          showBatchMessage(`${urls.length} link terdeteksi. Periksa daftar lalu tekan “Analisis semua”.`);
+          showBatchMessage(t("detectedLinks", { count: urls.length }));
         } else {
           input.value = clipboard.trim();
           input.focus();
         }
       } catch {
         input.focus();
-        showError("Browser tidak memberi izin membaca clipboard. Tempel link secara manual.");
+        showError(t("clipboardDenied"));
       }
     });
     batchPasteButton.addEventListener("click", async () => {
@@ -1837,7 +2076,7 @@
         batchInput.focus();
       } catch {
         batchInput.focus();
-        showBatchMessage("Browser tidak memberi izin membaca clipboard. Tempel link secara manual.", true);
+        showBatchMessage(t("clipboardDenied"), true);
       }
     });
     batchSelectAll.addEventListener("click", () => {
@@ -1851,6 +2090,12 @@
       batchContinue.hidden = true;
       await analyzeBatchChunk(nextUrls);
     });
+    document.querySelectorAll("[data-language]").forEach(button => {
+      button.addEventListener("click", () => applyLanguage(button.dataset.language));
+    });
+    let savedLanguage = "id";
+    try { savedLanguage = localStorage.getItem("linkdrop-language") || "id"; } catch {}
+    applyLanguage(savedLanguage);
   </script>
 </body>
 </html>
