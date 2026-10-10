@@ -57,21 +57,24 @@
       pointer-events: none;
       filter: none;
       opacity: .18;
+      --ambient-drift-x: clamp(32px, 3vw, 72px);
+      --ambient-drift-y: clamp(24px, 2vw, 52px);
       animation: ambient-drift 18s var(--ease-out) infinite alternate;
     }
 
     body::before {
       top: 18%;
-      left: -17vw;
+      left: clamp(-180px, -12vw, -44px);
       background: var(--sun);
       border-radius: 50%;
     }
 
     body::after {
-      right: -14vw;
+      right: clamp(-160px, -10vw, -36px);
       bottom: 8%;
       background: var(--accent);
       clip-path: polygon(50% 0%, 61% 34%, 98% 20%, 70% 50%, 100% 72%, 62% 65%, 50% 100%, 39% 65%, 3% 79%, 30% 50%, 2% 24%, 39% 34%);
+      --ambient-drift-x: clamp(-72px, -3vw, -32px);
       animation-delay: -9s;
     }
 
@@ -944,7 +947,7 @@
 
     .platform-logo img { width: 24px; height: 24px; object-fit: contain; }
 
-    @keyframes ambient-drift { to { transform: translate3d(6vw, 4vw, 0) scale(1.08); } }
+    @keyframes ambient-drift { to { transform: translate3d(var(--ambient-drift-x), var(--ambient-drift-y), 0) scale(1.05); } }
     @keyframes kicker-typing {
       0%, 14% { clip-path: inset(0 100% 0 0); }
       54%, 90% { clip-path: inset(0 0 0 0); animation-timing-function: steps(1, end); }

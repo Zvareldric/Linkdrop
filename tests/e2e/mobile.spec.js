@@ -98,6 +98,23 @@ test("halaman tetap utuh pada viewport ponsel", async ({ page }) => {
   }
 });
 
+test("dekorasi latar tetap terlihat proporsional pada layar ultrawide", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop-chrome", "Viewport ultrawide hanya diuji di desktop.");
+  await page.setViewportSize({ width: 2560, height: 1440 });
+
+  const visibleWidth = await page.evaluate(() => {
+    const before = getComputedStyle(document.body, "::before");
+    const after = getComputedStyle(document.body, "::after");
+    return {
+      circle: Number.parseFloat(before.width) + Number.parseFloat(before.left),
+      star: Number.parseFloat(after.width) + Number.parseFloat(after.right),
+    };
+  });
+
+  expect(visibleWidth.circle).toBeGreaterThan(80);
+  expect(visibleWidth.star).toBeGreaterThan(80);
+});
+
 test("pilihan bahasa menerjemahkan antarmuka tanpa mengubah layout", async ({ page }) => {
   await expect(page.getByText(/^Maks file: \d+ MB$/)).toHaveCount(2);
   await page.getByRole("button", { name: "EN", exact: true }).click();
