@@ -41,6 +41,35 @@ docker run --detach --name linkdrop --restart unless-stopped `
 
 Open [http://127.0.0.1:5050](http://127.0.0.1:5050). The container binds only to your computer. For macOS/Linux native Python setup or Windows troubleshooting, see [Installation](docs/INSTALLATION.md).
 
+## macOS and Linux
+
+Install Python 3.12, FFmpeg, Git, and Deno first. On macOS with Homebrew:
+
+```bash
+brew install python@3.12 ffmpeg deno git
+```
+
+On Ubuntu 24.04 or another Linux distribution with Python 3.12:
+
+```bash
+sudo apt update
+sudo apt install --yes git python3.12 python3.12-venv ffmpeg
+```
+
+Then, on either system, install and run Linkdrop:
+
+```bash
+git clone https://github.com/Zvareldric/Linkdrop.git
+cd Linkdrop
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+export DOWNLOAD_TOKEN_SECRET="$(openssl rand -hex 32)"
+PORT=5000 gunicorn --bind 127.0.0.1:5000 --workers 1 --threads 4 --timeout 0 app:app
+```
+
+Open [http://127.0.0.1:5000](http://127.0.0.1:5000). Linux users should install Deno 2.3+ or Node.js 22+ through their distribution's supported package source when a JavaScript runtime is needed.
+
 ## Documentation
 
 - [Installation](docs/INSTALLATION.md) — Windows/Docker Desktop first, then macOS and Linux.

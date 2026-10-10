@@ -41,6 +41,35 @@ docker run --detach --name linkdrop --restart unless-stopped `
 
 Buka [http://127.0.0.1:5050](http://127.0.0.1:5050). Container hanya membuka port di komputer Anda. Untuk setup Python native macOS/Linux atau troubleshooting Windows, baca [Panduan Instalasi](docs/INSTALLATION.id.md).
 
+## macOS dan Linux
+
+Pasang Python 3.12, FFmpeg, Git, dan Deno terlebih dahulu. Di macOS dengan Homebrew:
+
+```bash
+brew install python@3.12 ffmpeg deno git
+```
+
+Di Ubuntu 24.04 atau distribusi Linux lain yang menyediakan Python 3.12:
+
+```bash
+sudo apt update
+sudo apt install --yes git python3.12 python3.12-venv ffmpeg
+```
+
+Lalu, di kedua sistem, pasang dan jalankan Linkdrop:
+
+```bash
+git clone https://github.com/Zvareldric/Linkdrop.git
+cd Linkdrop
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+export DOWNLOAD_TOKEN_SECRET="$(openssl rand -hex 32)"
+PORT=5000 gunicorn --bind 127.0.0.1:5000 --workers 1 --threads 4 --timeout 0 app:app
+```
+
+Buka [http://127.0.0.1:5000](http://127.0.0.1:5000). Pengguna Linux perlu memasang Deno 2.3+ atau Node.js 22+ melalui sumber paket resmi distribusi bila runtime JavaScript diperlukan.
+
 ## Dokumentasi
 
 - [Instalasi](docs/INSTALLATION.id.md) — Windows/Docker Desktop terlebih dahulu, lalu macOS dan Linux.
