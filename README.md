@@ -39,7 +39,7 @@ docker run --detach --name linkdrop --restart unless-stopped `
   linkdrop
 ```
 
-Open [http://127.0.0.1:5050](http://127.0.0.1:5050). The container binds only to your computer. For macOS/Linux native Python setup or Windows troubleshooting, see [Installation](docs/INSTALLATION.md).
+Open [http://127.0.0.1:5050](http://127.0.0.1:5050). The container binds only to your computer.
 
 ## macOS and Linux
 
