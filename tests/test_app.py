@@ -490,6 +490,15 @@ class AppTests(unittest.TestCase):
         message = media_app._friendly_error(Exception("The page needs to be reloaded."))
         self.assertIn("analisis ulang", message.lower())
 
+    def test_tiktok_photo_error_is_actionable(self):
+        message = media_app._friendly_error(Exception(
+            "ERROR: Unsupported URL: https://www.tiktok.com/@creator/photo/123456789"
+        ))
+        self.assertEqual(
+            message,
+            "Postingan foto TikTok belum didukung oleh extractor saat ini. Coba link TikTok video.",
+        )
+
     def test_instagram_rate_limit_error_is_actionable(self):
         message = media_app._friendly_error(
             Exception("Requested content is not available, rate-limit reached or login required.")

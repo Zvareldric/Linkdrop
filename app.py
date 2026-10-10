@@ -303,6 +303,8 @@ def _friendly_error(exc: Exception) -> str:
 
     if isinstance(exc, UserFacingError):
         return message
+    if "unsupported url" in lowered and "tiktok.com" in lowered and "/photo/" in lowered:
+        return "Postingan foto TikTok belum didukung oleh extractor saat ini. Coba link TikTok video."
     if "unsupported url" in lowered:
         return "Link ini belum didukung. Pastikan link publik dan berasal dari platform yang didukung yt-dlp."
     if "rate-limit reached or login required" in lowered:
