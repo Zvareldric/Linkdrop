@@ -169,6 +169,41 @@ test("alur analisis berakhir pada tombol simpan yang dapat mengunduh file", asyn
   expect(download.suggestedFilename()).toBe("hasil-pengujian.mp4");
 });
 
+test("dialog simpan dan informasi batas tetap muat untuk nama file yang sangat panjang", async ({ page }) => {
+  const longName = `${"file_media_sangat_panjang_".repeat(12)}.mp4`;
+  await page.route("**/api/info", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ ...mediaPayload, title: "judul_media_sangat_panjang_tanpa_spasi_untuk_menguji_lebar_layar_mobile" })
+  }));
+  await page.route("**/api/download/mock?progress=1", route => route.fulfill({
+    status: 200,
+    contentType: "application/vnd.linkdrop.progress",
+    body: Buffer.concat([
+      frame("M", { filename: longName, content_type: "video/mp4", size: 1 }),
+      frame("D", Buffer.from("x")),
+      frame("C", { ok: true })
+    ])
+  }));
+
+  await page.getByLabel("Tempel link media").fill("https://example.com/video");
+  await page.getByRole("button", { name: "Lihat pilihan" }).click();
+  await page.getByRole("link", { name: /720p/ }).click();
+
+  const dialog = page.getByRole("dialog", { name: "File siap disimpan" });
+  await expect(dialog).toBeVisible();
+  const fitsViewport = await dialog.evaluate(element => {
+    const box = element.getBoundingClientRect();
+    return box.left >= 0 && box.right <= window.innerWidth;
+  });
+  expect(fitsViewport).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+  const maxFile = page.locator("#singlePanel .helper > span:last-child");
+  const maxFileFits = await maxFile.evaluate(element => element.getBoundingClientRect().right <= window.innerWidth);
+  expect(maxFileFits).toBe(true);
+});
+
 test("kontrol mode, clipboard, format, dan pilihan batch memperbarui antarmuka", async ({ page }) => {
   await page.route("**/api/info", route => route.fulfill({
     status: 200,
