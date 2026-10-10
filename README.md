@@ -3,63 +3,26 @@
 [![CI](https://github.com/Zvareldric/Linkdrop/actions/workflows/ci.yml/badge.svg)](https://github.com/Zvareldric/Linkdrop/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 ![Flask](https://img.shields.io/badge/Flask-3.x-000000?logo=flask&logoColor=white)
-![Playwright](https://img.shields.io/badge/Tested_with-Playwright-2EAD33?logo=playwright&logoColor=white)
 
 **English** · [Bahasa Indonesia](README.id.md)
 
-Linkdrop is a responsive web application for inspecting and downloading public media from YouTube, Instagram, TikTok, X, Facebook, and other websites supported by [yt-dlp](https://github.com/yt-dlp/yt-dlp). It exposes the formats reported by the source, streams download progress to the browser, and produces device-friendly output with FFmpeg.
+Linkdrop is a responsive web app for inspecting and downloading public media you own or are allowed to download. It supports YouTube, Instagram, TikTok, X, Facebook, and other sites supported by [yt-dlp](https://github.com/yt-dlp/yt-dlp).
 
-> Use Linkdrop only for media you own, media in the public domain, or media you have permission to download. Linkdrop does not bypass DRM, private access, CAPTCHA, or platform restrictions.
+![Linkdrop interface animation](docs/assets/linkdrop-demo.gif)
 
-## Who is it for?
+> Use Linkdrop only for your own media, public-domain media, or content you have permission to download. It does not bypass DRM, private access, CAPTCHA, or platform restrictions.
 
-Linkdrop is for personal use: editors working with licensed material, K-pop fans saving public media with the creator's permission, creators, and other users who need copies of public media for a personal collection or workflow. It is not a public download service or a tool for redistributing someone else's work.
+## What it does
 
-## Highlights
-
-- Lists real source resolutions from lowest to highest, including 1440p and 2160p when available.
-- Combines the selected video quality with the best available audio.
-- Converts incompatible MP4 streams to H.264/AAC while preserving the selected resolution.
-- Supports source audio and MP3 output at 128, 192, or 320 kbps.
-- Preserves original photos and packages multi-image posts as ZIP files.
-- Keeps single-link downloads as the default and offers an optional multi-link queue with per-item selection.
-- Combines selected links into a flat, storage-aware ZIP; galleries become folders instead of ZIP files inside ZIP files.
-- Displays live download, processing, and transfer progress with cancellation support.
-- Uses an explicit save action where users can keep the suggested filename or edit it; the original extension is preserved across desktop pickers, mobile share sheets, and browser downloads.
-- Uses signed, expiring download tokens and blocks private-network URLs.
-- Provides a responsive UI, PWA metadata, iOS safe areas, accessible focus states, and reduced-motion support.
-- Runs without a database or persistent job state.
-
-## How it works
-
-```text
-Browser
-  ├── POST /api/info
-  │     └── validate URL → inspect metadata → return signed choices
-  ├── GET /api/download/<token>?progress=1
-  │     └── download → merge/transcode → stream file → clean temporary data
-  └── POST /api/batch/download?progress=1
-        └── validate choices → process sequentially → package ZIP → clean temporary data
-```
-
-The download protocol carries progress events and file bytes in one HTTP response. Each short-lived worker remains bound to that response, without a persistent job registry or permanent output storage.
-
-### Multiple links
-
-`Single link` remains the default mode. Select `Multiple links` to paste one public URL per line, analyze at most two URLs concurrently, choose the output for each item, and download only the checked items as one flat ZIP. Carousel and gallery assets are placed in a named folder inside that ZIP, so no second extraction is needed. More than 10 selections show a warning; packages contain at most 30 selected links and are split at 80% of the safe temporary-storage limit. Package downloads remain sequential so the next ZIP does not replace an unsaved file.
-
-### Saving a file
-
-When processing reaches 100%, Linkdrop opens a save dialog with the server-provided filename. Edit the name if needed, or leave it unchanged to use the default. Linkdrop keeps the original extension so the downloaded file remains associated with its media type. The final save location is selected by the browser or operating system: a desktop file picker when supported, a mobile share sheet when available, or the browser's normal download location otherwise.
-
-## Requirements
-
-- Python 3.12 or newer
-- FFmpeg
-- Deno 2.3+ or Node.js 22+ for JavaScript challenges used by some YouTube formats
-- Node.js 20+ only when running the Playwright test suite
+- Shows the real formats and source resolutions available for a public link.
+- Downloads video, source audio or MP3, and original photos; multi-image posts become ZIP files.
+- Streams download progress and lets users choose where to save the completed file.
+- Supports an optional multi-link mode that creates one ZIP package.
+- Works on desktop and mobile, with Indonesian and English interfaces.
 
 ## Quick start
+
+**Requirements:** Python 3.12+, FFmpeg, and Deno 2.3+ or Node.js 22+ for some JavaScript-based source checks.
 
 ```bash
 git clone https://github.com/Zvareldric/Linkdrop.git
@@ -74,132 +37,29 @@ export DOWNLOAD_TOKEN_SECRET="$(openssl rand -hex 32)"
 PORT=5000 gunicorn --bind 127.0.0.1:5000 --workers 1 --threads 4 --timeout 0 app:app
 ```
 
-Open [http://127.0.0.1:5000](http://127.0.0.1:5000).
+Open [http://127.0.0.1:5000](http://127.0.0.1:5000). This setup is for macOS and Linux; see the installation guide for Windows.
 
-This native quick start is for macOS and Linux. For Windows Docker Desktop, platform-specific packages, permissions, and private phone access, see the [Installation Guide](docs/INSTALLATION.md). Use `python app.py` only for temporary development, because its development server binds to network interfaces.
+## Documentation
 
-## Private access from a phone
-
-For personal use, the recommended setup is to keep Linkdrop on your computer and publish it only inside your private [Tailscale](https://tailscale.com/) network. Tailscale's Personal plan is available at no cost for non-commercial use; review its [plan terms](https://tailscale.com/pricing) before relying on it. This avoids a public deployment and works from mobile data or another Wi-Fi network.
-
-Start Linkdrop on port `5050`:
-
-```bash
-source .venv/bin/activate
-PORT=5050 gunicorn --bind 127.0.0.1:5050 --workers 1 --threads 4 --timeout 0 app:app
-```
-
-In another terminal, expose the local service to your tailnet:
-
-```bash
-tailscale serve --bg 5050
-tailscale serve status
-```
-
-Install Tailscale on the phone, sign in to the same tailnet, and open the HTTPS address printed by `tailscale serve`. The computer must remain powered on, awake, connected to Tailscale, and running Linkdrop.
-
-See the complete [Private Tailscale Access Guide](docs/TAILSCALE.md) for installation, security notes, shutdown commands, and troubleshooting.
-
-### When the host must stay online
-
-Use a VPS or persistent container host when Linkdrop must remain available while the personal computer is off. A VPS has provider costs and needs additional hardening; keep access behind Tailscale or an HTTPS proxy and do not expose the application without rate limiting. See the [Deployment Guide](docs/DEPLOYMENT.md).
-
-## Configuration
-
-| Variable | Default | Purpose |
-|---|---:|---|
-| `DOWNLOAD_TOKEN_SECRET` | Development fallback | Signing key; required in production |
-| `DOWNLOAD_TOKEN_MAX_AGE` | `900` | Download token lifetime in seconds |
-| `MAX_MEDIA_BYTES` | 2 GB locally; 220 MB on Vercel | Maximum working media size |
-| `HTTP_TIMEOUT` | `30` | Source connection timeout in seconds |
-| `DOWNLOAD_DIR` | `downloads/` or `/tmp/linkdrop` | Temporary working directory |
-| `YTDLP_COOKIES_B64` | Empty | Base64-encoded Netscape cookie file for a server |
-| `YTDLP_COOKIES_FILE` | Empty | Local Netscape cookie file path |
-| `YTDLP_COOKIES_FROM_BROWSER` | Empty | Local browser cookie source |
-| `FFMPEG_LOCATION` | System `PATH` | Custom FFmpeg path |
-| `YTDLP_JS_RUNTIME` | Auto-detected | JavaScript runtime, such as `deno` |
-
-Never commit `.env`, browser cookies, or exported account sessions. Do not use a primary account's cookies on a public instance.
+- [Installation](docs/INSTALLATION.md) — macOS, Linux, and Windows/Docker Desktop.
+- [Private phone access](docs/TAILSCALE.md) — access Linkdrop safely through Tailscale.
+- [Deployment](docs/DEPLOYMENT.md) — persistent hosting and operational limits.
+- [Architecture](docs/ARCHITECTURE.md) — media flow, temporary files, and security model.
 
 ## Tests
-
-Run the Python suite:
 
 ```bash
 source .venv/bin/activate
 python -m unittest discover -s tests -v
-```
 
-Run the desktop and mobile browser suite:
-
-```bash
 npm ci
 npx playwright install chromium webkit
 npm run test:e2e
 ```
 
-The browser matrix covers desktop Chrome, Pixel 7, and iPhone 13/WebKit.
+## Limitations
 
-## Container deployment
-
-The root `Dockerfile` is suitable for Docker hosts, Dokku, Coolify, and CapRover:
-
-```bash
-docker build -t linkdrop .
-docker run --rm \
-  -p 5050:8080 \
-  -e DOWNLOAD_TOKEN_SECRET="$(openssl rand -hex 32)" \
-  linkdrop
-```
-
-For public deployment, a persistent VM or container host is more reliable than a short-lived serverless function because large media requires CPU time, temporary disk space, and sustained streaming. See [Deployment Guide](docs/DEPLOYMENT.md) for production settings and provider-specific trade-offs.
-
-## Project structure
-
-```text
-Linkdrop/
-├── .github/workflows/ci.yml   # Automated unit and browser tests
-├── docs/                      # Architecture, deployment, PRD, and tooling notes
-├── downloads/                 # Ignored local working directory
-├── static/                    # PWA manifest and visual assets
-├── templates/                 # Responsive web interface
-├── tests/
-│   └── e2e/                   # Playwright desktop and mobile tests
-├── app.py                     # Flask application and media pipeline
-├── Dockerfile                 # General-purpose production image
-├── Dockerfile.vercel          # Vercel-oriented image
-├── playwright.config.js       # Browser test matrix
-└── requirements.txt           # Python runtime dependencies
-```
-
-## API
-
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/` | Web interface |
-| `GET` | `/api/health` | Runtime and FFmpeg health check |
-| `POST` | `/api/info` | Validate a public URL and return available formats |
-| `GET` | `/api/download/<token>` | Prepare and stream the selected output |
-| `POST` | `/api/batch/download` | Process signed selections sequentially and stream a ZIP package |
-
-Add `?progress=1` to the download endpoint to use Linkdrop's framed progress stream.
-
-## Known limitations
-
-- Platform extractors can break when source websites change.
-- Some sources require login, cookies, a PO token, or a residential IP address.
-- Cloud data-center IP addresses may be throttled or blocked.
-- MP3 transcoding does not restore detail missing from the source.
-- A quality label is a maximum output resolution, not an upscale target.
-
-## Documentation
-
-- [Architecture](docs/ARCHITECTURE.md)
-- [Installation Guide](docs/INSTALLATION.md)
-- [Deployment Guide](docs/DEPLOYMENT.md)
-- [Private Tailscale Access](docs/TAILSCALE.md)
-- [Product Requirements](docs/PRD.md)
-- [Tooling Decisions](docs/TOOLING.md)
+Source websites and their extractors can change or block requests. A platform may require a valid account session, cookies, a PO token, or a supported region; Linkdrop does not circumvent those requirements. MP3 conversion cannot add quality that is absent from the source.
 
 ## Maintainer
 
