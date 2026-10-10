@@ -26,9 +26,9 @@ const richMediaPayload = {
   choices: {
     video: mediaPayload.choices.video,
     audio: [{
-      id: "audio:source",
-      label: "Audio sumber",
-      detail: "AAC / M4A · tanpa konversi",
+      id: "audio:128",
+      label: "MP3 128 kbps",
+      detail: "MP3 · 128 kbps",
       estimated_bytes: 2 * 1024 * 1024,
       token: "audio-token",
       download_url: "/api/download/audio"
@@ -156,7 +156,7 @@ test("kontrol mode, clipboard, format, dan pilihan batch memperbarui antarmuka",
   await page.getByRole("button", { name: "Lihat pilihan" }).click();
 
   await page.getByRole("button", { name: "Audio" }).click();
-  await expect(page.getByRole("link", { name: /Audio sumber/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /MP3 128 kbps/ })).toBeVisible();
   await page.getByRole("button", { name: "Foto" }).click();
   await expect(page.getByRole("link", { name: /Media asli/ })).toBeVisible();
 

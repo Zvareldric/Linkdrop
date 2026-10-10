@@ -590,29 +590,12 @@ def _build_choices(url: str, info: dict) -> dict:
         ))
 
     source_audio = _best_audio_format(formats)
-    source_bitrate = round(source_audio.get("abr") or source_audio.get("tbr") or 0) if source_audio else 0
-    source_size_bytes = _format_size(source_audio, info.get("duration")) if source_audio else None
-    source_size = _pretty_bytes(source_size_bytes)
-    source_codec = str(source_audio.get("acodec") or "").lower() if source_audio else ""
-    source_format = "AAC / M4A" if source_codec.startswith(("aac", "mp4a")) else "Opus / WebM"
-    source_label = "Audio sumber" + (f" · {source_bitrate} kbps" if source_bitrate else "")
-    source_detail = f"{source_format} · tanpa konversi"
-    if source_size:
-        source_detail += f" · sekitar {source_size}"
 
     def mp3_detail(bitrate: int) -> str:
         size = _pretty_bytes(int(bitrate * 1000 * info["duration"] / 8)) if info.get("duration") else None
         return f"MP3 · {bitrate} kbps" + (f" · sekitar {size}" if size else "")
 
     audio_choices = [
-        _choice(
-            url,
-            "audio",
-            source_label,
-            source_detail,
-            codec="source",
-            estimated_bytes=source_size_bytes,
-        ),
         _choice(
             url,
             "audio",

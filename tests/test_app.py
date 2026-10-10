@@ -197,9 +197,9 @@ class AppTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(labels, ["360p", "1080p"])
-        self.assertEqual(len(payload["choices"]["audio"]), 4)
-        self.assertEqual(payload["choices"]["audio"][0]["label"], "Audio sumber · 128 kbps")
-        self.assertEqual(payload["choices"]["audio"][0]["detail"], "AAC / M4A · tanpa konversi · sekitar 1.9 MB")
+        self.assertEqual(len(payload["choices"]["audio"]), 3)
+        self.assertEqual(payload["choices"]["audio"][0]["label"], "MP3 128 kbps")
+        self.assertEqual(payload["choices"]["audio"][0]["detail"], "MP3 · 128 kbps · sekitar 1.9 MB")
         self.assertTrue(payload["choices"]["video"][0]["download_url"].startswith("/api/download/"))
         self.assertTrue(payload["choices"]["video"][0]["token"])
         self.assertEqual(payload["choices"]["video"][0]["estimated_bytes"], 4_000_000)
