@@ -14,6 +14,10 @@ Panduan ini memasang Linkdrop untuk penggunaan pribadi. Panduan ini tidak membuk
 
 Linkdrop membutuhkan akses internet keluar ke sumber media publik. Setelah dependency terpasang, Linkdrop tidak membutuhkan akses administrator. Browser atau sistem operasi, bukan Linkdrop, yang menentukan lokasi akhir file unduhan.
 
+## Jalur yang direkomendasikan: Windows
+
+Untuk komputer Windows, mulai dari [Windows — Docker Desktop](#windows--docker-desktop-direkomendasikan). Ini adalah setup Windows yang didukung dan menjaga Linkdrop tetap berada dalam container Linux. Pengguna macOS dan Linux dapat memakai bagian Python native di bawah.
+
 ## macOS — Python native
 
 ### 1. Pasang prasyarat
@@ -85,7 +89,7 @@ Buka `http://127.0.0.1:5000` dari komputer yang sama. `sudo` hanya diperlukan un
 
 Untuk akses privat dari perangkat lain, pasang Tailscale lalu gunakan perintah Gunicorn loopback pada bagian macOS atau ikuti [Akses Privat Tailscale](TAILSCALE.id.md).
 
-## Windows — Docker Desktop
+## Windows — Docker Desktop (direkomendasikan)
 
 Gunicorn adalah server berorientasi Unix, sehingga Docker Desktop adalah jalur Windows yang didukung. Docker menjalankan Linkdrop dalam container Linux dari repository ini dan hanya membuka port ke komputer lokal.
 

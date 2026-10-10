@@ -20,28 +20,30 @@ Linkdrop adalah aplikasi web responsif untuk menganalisis dan mengunduh media pu
 - Menyediakan mode beberapa link opsional yang menghasilkan satu paket ZIP.
 - Nyaman digunakan di desktop maupun ponsel, dalam Bahasa Indonesia dan Inggris.
 
-## Mulai cepat
+## Mulai cepat di Windows (direkomendasikan)
 
-**Kebutuhan:** Python 3.12+, FFmpeg, serta Deno 2.3+ atau Node.js 22+ untuk beberapa sumber dengan pemeriksaan JavaScript.
+**Kebutuhan:** [Git for Windows](https://git-scm.com/download/win) dan [Docker Desktop](https://www.docker.com/products/docker-desktop/) dengan backend WSL 2.
 
-```bash
+Buka PowerShell lalu jalankan:
+
+```powershell
 git clone https://github.com/Zvareldric/Linkdrop.git
-cd Linkdrop
+Set-Location Linkdrop
 
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-
-cp .env.example .env
-export DOWNLOAD_TOKEN_SECRET="$(openssl rand -hex 32)"
-PORT=5000 gunicorn --bind 127.0.0.1:5000 --workers 1 --threads 4 --timeout 0 app:app
+$secret = [Convert]::ToHexString((1..32 | ForEach-Object { Get-Random -Maximum 256 }))
+docker build -t linkdrop .
+docker run --detach --name linkdrop --restart unless-stopped `
+  --publish 127.0.0.1:5050:8080 `
+  --env "DOWNLOAD_TOKEN_SECRET=$secret" `
+  --env MAX_MEDIA_BYTES=2147483648 `
+  linkdrop
 ```
 
-Buka [http://127.0.0.1:5000](http://127.0.0.1:5000). Setup ini untuk macOS dan Linux; panduan instalasi juga mencakup Windows.
+Buka [http://127.0.0.1:5050](http://127.0.0.1:5050). Container hanya membuka port di komputer Anda. Untuk setup Python native macOS/Linux atau troubleshooting Windows, baca [Panduan Instalasi](docs/INSTALLATION.id.md).
 
 ## Dokumentasi
 
-- [Instalasi](docs/INSTALLATION.id.md) — macOS, Linux, dan Windows/Docker Desktop.
+- [Instalasi](docs/INSTALLATION.id.md) — Windows/Docker Desktop terlebih dahulu, lalu macOS dan Linux.
 - [Akses privat dari ponsel](docs/TAILSCALE.id.md) — akses aman melalui Tailscale.
 - [Deployment](docs/DEPLOYMENT.md) — hosting persisten dan batas operasional.
 - [Arsitektur](docs/ARCHITECTURE.md) — alur media, file sementara, dan model keamanan.

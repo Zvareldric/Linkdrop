@@ -20,28 +20,30 @@ Linkdrop is a responsive web app for inspecting and downloading public media you
 - Supports an optional multi-link mode that creates one ZIP package.
 - Works on desktop and mobile, with Indonesian and English interfaces.
 
-## Quick start
+## Quick start for Windows (recommended)
 
-**Requirements:** Python 3.12+, FFmpeg, and Deno 2.3+ or Node.js 22+ for some JavaScript-based source checks.
+**Requirements:** [Git for Windows](https://git-scm.com/download/win) and [Docker Desktop](https://www.docker.com/products/docker-desktop/) with the WSL 2 backend.
 
-```bash
+Open PowerShell and run:
+
+```powershell
 git clone https://github.com/Zvareldric/Linkdrop.git
-cd Linkdrop
+Set-Location Linkdrop
 
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-
-cp .env.example .env
-export DOWNLOAD_TOKEN_SECRET="$(openssl rand -hex 32)"
-PORT=5000 gunicorn --bind 127.0.0.1:5000 --workers 1 --threads 4 --timeout 0 app:app
+$secret = [Convert]::ToHexString((1..32 | ForEach-Object { Get-Random -Maximum 256 }))
+docker build -t linkdrop .
+docker run --detach --name linkdrop --restart unless-stopped `
+  --publish 127.0.0.1:5050:8080 `
+  --env "DOWNLOAD_TOKEN_SECRET=$secret" `
+  --env MAX_MEDIA_BYTES=2147483648 `
+  linkdrop
 ```
 
-Open [http://127.0.0.1:5000](http://127.0.0.1:5000). This setup is for macOS and Linux; see the installation guide for Windows.
+Open [http://127.0.0.1:5050](http://127.0.0.1:5050). The container binds only to your computer. For macOS/Linux native Python setup or Windows troubleshooting, see [Installation](docs/INSTALLATION.md).
 
 ## Documentation
 
-- [Installation](docs/INSTALLATION.md) — macOS, Linux, and Windows/Docker Desktop.
+- [Installation](docs/INSTALLATION.md) — Windows/Docker Desktop first, then macOS and Linux.
 - [Private phone access](docs/TAILSCALE.md) — access Linkdrop safely through Tailscale.
 - [Deployment](docs/DEPLOYMENT.md) — persistent hosting and operational limits.
 - [Architecture](docs/ARCHITECTURE.md) — media flow, temporary files, and security model.

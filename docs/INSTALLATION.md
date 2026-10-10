@@ -14,6 +14,10 @@ This guide installs Linkdrop for private use. It does not open the application t
 
 Linkdrop needs outbound internet access to public media sources. It does not need administrator access after its dependencies are installed. The browser or operating system, not Linkdrop, chooses the final save location for downloads.
 
+## Recommended path: Windows
+
+For a Windows computer, start with [Windows — Docker Desktop](#windows--docker-desktop-recommended). It is the supported Windows setup and keeps Linkdrop inside its Linux container. macOS and Linux users can use the native Python sections below.
+
 ## macOS — native Python
 
 ### 1. Install prerequisites
@@ -85,7 +89,7 @@ Open `http://127.0.0.1:5000` from the same computer. `sudo` is required only to 
 
 For private access from another device, install Tailscale and use the loopback Gunicorn command in the macOS section or follow [Private Tailscale Access](TAILSCALE.md).
 
-## Windows — Docker Desktop
+## Windows — Docker Desktop (recommended)
 
 Gunicorn is a Unix-oriented server, so Docker Desktop is the supported Windows route. It runs Linkdrop in the repository's Linux container and publishes it only to the local computer.
 
