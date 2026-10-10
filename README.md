@@ -1,14 +1,33 @@
-# Linkdrop
+<div align="center">
+  <img src="static/mark.svg" width="56" alt="Linkdrop logo">
 
-[![CI](https://github.com/Zvareldric/Linkdrop/actions/workflows/ci.yml/badge.svg)](https://github.com/Zvareldric/Linkdrop/actions/workflows/ci.yml)
-![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
-![Flask](https://img.shields.io/badge/Flask-3.x-000000?logo=flask&logoColor=white)
+  <h1>Linkdrop</h1>
 
-**English** · [Bahasa Indonesia](README.id.md)
+  <h3>Save public media in the formats your source actually provides.</h3>
+
+  <p><strong>English</strong> · <a href="README.id.md">Bahasa Indonesia</a></p>
+
+  <p>
+    <a href="#quick-start-for-windows-recommended">Quick start</a> ·
+    <a href="#macos-and-linux">macOS &amp; Linux</a> ·
+    <a href="#documentation">Documentation</a> ·
+    <a href="#limitations">Limitations</a>
+  </p>
+
+  <p>
+    <a href="https://github.com/Zvareldric/Linkdrop/actions/workflows/ci.yml"><img src="https://github.com/Zvareldric/Linkdrop/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+    <img src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&amp;logoColor=white" alt="Python 3.12">
+    <img src="https://img.shields.io/badge/Flask-3.x-000000?logo=flask&amp;logoColor=white" alt="Flask 3">
+  </p>
+</div>
+
+---
+
+<p align="center">
+  <img src="docs/assets/linkdrop-demo-en.gif" width="960" alt="Animated Linkdrop interface demo">
+</p>
 
 Linkdrop is a responsive web app for inspecting and downloading public media you own or are allowed to download. It supports YouTube, Instagram, TikTok, X, Facebook, and other sites supported by [yt-dlp](https://github.com/yt-dlp/yt-dlp).
-
-![Linkdrop interface animation](docs/assets/linkdrop-demo-en.gif)
 
 > Use Linkdrop only for your own media, public-domain media, or content you have permission to download. It does not bypass DRM, private access, CAPTCHA, or platform restrictions.
 
