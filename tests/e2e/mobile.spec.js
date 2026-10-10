@@ -70,6 +70,10 @@ test.beforeEach(async ({ page }) => {
 test("halaman tetap utuh pada viewport ponsel", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Pilih kualitasnya. Simpan medianya." })).toBeVisible();
   await expect(page.getByLabel("Tempel link media")).toBeVisible();
+  await expect(page.locator(".brand-mark")).toHaveAttribute("src", "/static/mark.svg");
+  await expect(page.locator(".transfer-visual")).toBeVisible();
+  await expect(page.locator(".media-slip")).toHaveCount(3);
+  await expect(page.locator(".media-icon")).toHaveCount(3);
 
   const viewportFits = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
   expect(viewportFits).toBe(true);

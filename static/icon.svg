@@ -1,12 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <defs>
-    <linearGradient id="surface" x1="72" y1="48" x2="448" y2="464" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#5479F1"/>
-      <stop offset="1" stop-color="#2446B8"/>
-    </linearGradient>
-  </defs>
-  <rect width="512" height="512" rx="128" fill="url(#surface)"/>
-  <path d="M256 118v192m0 0-78-78m78 78 78-78" fill="none" stroke="#fff" stroke-width="44" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M150 382h212" fill="none" stroke="#fff" stroke-opacity=".34" stroke-width="30" stroke-linecap="round"/>
-  <path d="m342 128 38 38" fill="none" stroke="#FFB19D" stroke-width="28" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">Linkdrop</title>
+  <rect width="256" height="256" rx="64" fill="#18223A"/>
+  <path fill="#FFFFFF" d="M40 36h44v92l44 38 44-38V36h44v126c0 32-26 58-58 58h-16v-44h16c8 0 14-6 14-14v-8l-44 38-44-38v8c0 8 6 14 14 14h16v44H98c-32 0-58-26-58-58V36Z"/>
 </svg>

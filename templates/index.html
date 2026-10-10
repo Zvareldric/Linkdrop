@@ -98,30 +98,18 @@
     .brand {
       display: inline-flex;
       align-items: center;
-      gap: 10px;
-      font-weight: 750;
-      letter-spacing: -.03em;
+      gap: 9px;
     }
 
     .brand-mark {
-      display: grid;
-      place-items: center;
-      width: 38px;
-      height: 38px;
-      color: white;
-      background: linear-gradient(145deg, #466ceb, #2748bd);
-      border: 1px solid rgba(255, 255, 255, .25);
-      border-radius: 12px 12px 12px 4px;
-      box-shadow: 0 8px 18px rgba(49, 87, 213, .26);
-      transition: transform .25s var(--ease-out), box-shadow .25s var(--ease-out);
+      width: 34px;
+      height: 34px;
+      transition: transform .25s var(--ease-out);
     }
 
-    .brand:hover .brand-mark {
-      box-shadow: 0 12px 25px rgba(49, 87, 213, .34);
-      transform: rotate(-5deg) translateY(-2px);
-    }
+    .brand:hover .brand-mark { transform: translateY(-2px); }
 
-    .brand-mark svg { width: 24px; height: 24px; }
+    .brand-wordmark { font-size: 17px; font-weight: 780; letter-spacing: -.055em; }
 
     .hero {
       display: grid;
@@ -186,40 +174,57 @@
     }
 
     .transfer-visual {
+      position: relative;
       display: grid;
-      gap: 10px;
-      padding: 14px;
-      background: #18223a;
-      border: 1px solid rgba(255, 255, 255, .08);
-      border-radius: 24px;
-      box-shadow: 0 24px 60px rgba(23, 32, 51, .18);
+      gap: 28px;
+      padding: 8px 0 8px 64px;
       animation: visual-enter .7s var(--ease-out) both;
     }
 
-    .media-slip {
-      width: 100%;
-      padding: 16px;
-      color: var(--ink);
-      background: rgba(255, 255, 255, .96);
-      border: 1px solid rgba(255, 255, 255, .7);
-      border-radius: 15px;
-      animation: slip-float 5.5s var(--ease-out) infinite alternate;
+    .transfer-visual::before {
+      position: absolute;
+      top: 18px;
+      bottom: 18px;
+      left: 19px;
+      width: 3px;
+      content: "";
+      background: linear-gradient(var(--signal), #91a6f8);
+      border-radius: 999px;
     }
 
-    .media-slip:nth-child(2) { animation-delay: -1.8s; }
-    .media-slip:nth-child(3) { animation-delay: -3.5s; }
+    .media-slip {
+      position: relative;
+      width: 100%;
+      padding: 0;
+      color: var(--ink);
+    }
 
-    .media-slip span { color: var(--signal); font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
-    .media-slip strong { display: block; margin-top: 4px; font-size: 15px; }
+    .media-icon {
+      position: absolute;
+      top: -1px;
+      left: -64px;
+      display: grid;
+      place-items: center;
+      width: 40px;
+      height: 40px;
+      padding: 7px;
+      color: var(--signal);
+      background: var(--canvas);
+      border: 3px solid var(--signal);
+      border-radius: 50%;
+      box-shadow: 0 0 0 5px rgba(49, 87, 213, .1);
+    }
+
+    .media-icon svg { width: 100%; height: 100%; }
+    .media-label { color: var(--signal); font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+    .media-slip strong { display: block; margin-top: 5px; font-size: 16px; line-height: 1.35; }
     .media-slip i {
       display: block;
       width: var(--meter, 76%);
-      height: 5px;
-      margin-top: 12px;
-      background: linear-gradient(90deg, var(--signal), #7b96ff);
+      height: 2px;
+      margin-top: 10px;
+      background: rgba(49, 87, 213, .35);
       border-radius: 999px;
-      background-size: 180% 100%;
-      animation: meter-shine 2.8s linear infinite;
     }
 
     .card {
@@ -732,8 +737,6 @@
 
     @keyframes ambient-drift { to { transform: translate3d(6vw, 4vw, 0) scale(1.08); } }
     @keyframes visual-enter { from { opacity: 0; transform: translateY(16px) rotate(1deg); } }
-    @keyframes slip-float { to { transform: translateY(-5px); } }
-    @keyframes meter-shine { to { background-position: -180% 0; } }
     @keyframes card-enter { from { opacity: 0; transform: translateY(10px); } }
     @keyframes result-reveal { from { opacity: 0; transform: translateY(10px); } }
     @keyframes dialog-in { from { opacity: 0; transform: translateY(14px); } }
@@ -757,9 +760,7 @@
     @media (max-width: 720px) {
       .topbar { margin-bottom: 42px; }
       .hero { grid-template-columns: 1fr; gap: 28px; }
-      .transfer-visual { grid-template-columns: repeat(3, 1fr); }
-      .media-slip { padding: 13px 15px; }
-      .media-slip i { margin-top: 8px; }
+      .transfer-visual { max-width: 520px; }
       .input-shell { grid-template-columns: 1fr auto; }
       .url-input { grid-column: 1 / -1; }
       .button-primary { flex: 1; }
@@ -777,7 +778,10 @@
       .lead { margin-top: 18px; }
       .platforms { gap: 6px; }
       .platform { padding: 6px 9px; font-size: 11px; }
-      .transfer-visual { display: none; }
+      .transfer-visual { gap: 22px; padding-left: 56px; }
+      .transfer-visual::before { left: 17px; }
+      .media-icon { left: -56px; width: 36px; height: 36px; padding: 6px; }
+      .media-slip strong { font-size: 15px; }
       .card { padding: 15px; border-radius: 15px; }
       .input-shell { gap: 8px; padding: 7px; }
       .button { min-height: 48px; padding: 0 14px; }
@@ -807,7 +811,7 @@
 <body>
   <main class="shell">
     <header class="topbar">
-      <div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3v11m0 0-4-4m4 4 4-4M5 18h14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"/><path d="M18.5 5.5 21 8" stroke="#ffb19d" stroke-linecap="round" stroke-width="2.2"/></svg></span> Linkdrop</div>
+      <div class="brand"><img class="brand-mark" src="/static/mark.svg" alt=""><span class="brand-wordmark">Linkdrop</span></div>
     </header>
 
     <section class="hero">
@@ -825,9 +829,18 @@
         </div>
       </div>
       <div class="transfer-visual" aria-hidden="true">
-        <div class="media-slip"><span>Video</span><strong>Pilih resolusi hingga 4K</strong><i style="--meter: 86%"></i></div>
-        <div class="media-slip"><span>Audio</span><strong>MP3 hingga 320 kbps</strong><i style="--meter: 68%"></i></div>
-        <div class="media-slip"><span>Foto</span><strong>Simpan file tanpa kompresi ulang</strong><i style="--meter: 76%"></i></div>
+        <div class="media-slip">
+          <span class="media-icon"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="13" height="12" rx="3" stroke="currentColor" stroke-width="2.2"/><path d="m16 10 5-3v10l-5-3Z" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></svg></span>
+          <span class="media-label">Video</span><strong>Pilih resolusi hingga 4K</strong><i style="--meter: 86%"></i>
+        </div>
+        <div class="media-slip">
+          <span class="media-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M9 18V6l10-2v12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="18" r="3" stroke="currentColor" stroke-width="2.2"/><circle cx="16" cy="16" r="3" stroke="currentColor" stroke-width="2.2"/></svg></span>
+          <span class="media-label">Audio</span><strong>MP3 hingga 320 kbps</strong><i style="--meter: 68%"></i>
+        </div>
+        <div class="media-slip">
+          <span class="media-icon"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="3" stroke="currentColor" stroke-width="2.2"/><circle cx="16.5" cy="8.5" r="1.5" fill="currentColor"/><path d="m5.5 17 4.5-5 3.2 3 2-2 3.3 4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="media-label">Foto</span><strong>Simpan file tanpa kompresi ulang</strong><i style="--meter: 76%"></i>
+        </div>
       </div>
     </section>
 
