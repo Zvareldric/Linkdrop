@@ -78,6 +78,7 @@ test("halaman tetap utuh pada viewport ponsel", async ({ page }) => {
   await expect(page.locator(".media-line")).toHaveCount(3);
   await expect(page.locator(".platform-marquee")).toBeVisible();
   await expect(page.locator(".platform-logo-set").first().locator(".platform-logo")).toHaveCount(14);
+  await expect(page.locator(".platform-logo-set").first().locator("img").first()).toHaveAttribute("src", "/static/platforms/youtube.svg");
   await expect(page.locator(".input-shell button, .batch-input-shell button")).toHaveCount(0);
   await expect(page.locator(".input-actions button")).toHaveCount(2);
   await expect(page.locator(".batch-input-actions button")).toHaveCount(2);

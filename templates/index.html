@@ -1166,20 +1166,20 @@
     </section>
 
     {% set platform_logos = [
-      ('youtube', 'FF0000', 'YouTube'),
-      ('instagram', 'E4405F', 'Instagram'),
-      ('tiktok', '000000', 'TikTok'),
-      ('x', '000000', 'X / Twitter'),
-      ('facebook', '0866FF', 'Facebook'),
-      ('vimeo', '1AB7EA', 'Vimeo'),
-      ('reddit', 'FF4500', 'Reddit'),
-      ('soundcloud', 'FF5500', 'SoundCloud'),
-      ('twitch', '9146FF', 'Twitch'),
-      ('dailymotion', '0A0A0A', 'Dailymotion'),
-      ('rumble', '85C742', 'Rumble'),
-      ('dropbox', '0061FF', 'Dropbox'),
-      ('bandcamp', '1DA0C3', 'Bandcamp'),
-      ('ted', 'E62B1E', 'TED')
+      ('youtube', 'YouTube'),
+      ('instagram', 'Instagram'),
+      ('tiktok', 'TikTok'),
+      ('x', 'X / Twitter'),
+      ('facebook', 'Facebook'),
+      ('vimeo', 'Vimeo'),
+      ('reddit', 'Reddit'),
+      ('soundcloud', 'SoundCloud'),
+      ('twitch', 'Twitch'),
+      ('dailymotion', 'Dailymotion'),
+      ('rumble', 'Rumble'),
+      ('dropbox', 'Dropbox'),
+      ('bandcamp', 'Bandcamp'),
+      ('ted', 'TED')
     ] %}
     <section class="platform-marquee" aria-labelledby="platformMarqueeTitle">
       <div class="platform-marquee-head">
@@ -1189,13 +1189,13 @@
       <div class="platform-marquee-window">
         <div class="platform-marquee-track">
           <div class="platform-logo-set">
-            {% for slug, color, label in platform_logos %}
-            <span class="platform-logo"><img src="https://cdn.simpleicons.org/{{ slug }}/{{ color }}" alt="" width="24" height="24" loading="lazy" decoding="async"><span>{{ label }}</span></span>
+            {% for slug, label in platform_logos %}
+            <span class="platform-logo"><img src="/static/platforms/{{ slug }}.svg" alt="" width="24" height="24" loading="lazy" decoding="async"><span>{{ label }}</span></span>
             {% endfor %}
           </div>
           <div class="platform-logo-set" aria-hidden="true">
-            {% for slug, color, label in platform_logos %}
-            <span class="platform-logo"><img src="https://cdn.simpleicons.org/{{ slug }}/{{ color }}" alt="" width="24" height="24" loading="lazy" decoding="async"><span>{{ label }}</span></span>
+            {% for slug, label in platform_logos %}
+            <span class="platform-logo"><img src="/static/platforms/{{ slug }}.svg" alt="" width="24" height="24" loading="lazy" decoding="async"><span>{{ label }}</span></span>
             {% endfor %}
           </div>
         </div>
