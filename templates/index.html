@@ -98,18 +98,28 @@
     .brand {
       display: inline-flex;
       align-items: center;
-      gap: 9px;
+      gap: 8px;
     }
 
-    .brand-mark {
-      width: 34px;
-      height: 34px;
+    .brand-symbol {
+      position: relative;
+      top: -3px;
+      width: 22px;
+      height: auto;
+    }
+
+    .brand-wordmark {
+      width: 116px;
+      height: auto;
+    }
+
+    .brand-symbol,
+    .brand-wordmark {
       transition: transform .25s var(--ease-out);
     }
 
-    .brand:hover .brand-mark { transform: translateY(-2px); }
-
-    .brand-wordmark { font-size: 17px; font-weight: 780; letter-spacing: -.055em; }
+    .brand:hover .brand-symbol,
+    .brand:hover .brand-wordmark { transform: translateY(-2px); }
 
     .hero {
       display: grid;
@@ -188,8 +198,10 @@
       left: 19px;
       width: 3px;
       content: "";
-      background: linear-gradient(var(--signal), #91a6f8);
+      background: linear-gradient(180deg, #91a6f8, var(--signal), #91a6f8);
+      background-size: 100% 220%;
       border-radius: 999px;
+      animation: rail-flow 4s linear infinite;
     }
 
     .media-slip {
@@ -213,18 +225,56 @@
       border: 3px solid var(--signal);
       border-radius: 50%;
       box-shadow: 0 0 0 5px rgba(49, 87, 213, .1);
+      transition: background-color .3s var(--ease-out), box-shadow .3s var(--ease-out), transform .3s var(--ease-out);
     }
 
-    .media-icon svg { width: 100%; height: 100%; }
+    .media-icon::after {
+      position: absolute;
+      inset: -8px;
+      content: "";
+      border: 1px solid var(--signal);
+      border-radius: 50%;
+      opacity: 0;
+      animation: node-breathe 4.8s ease-in-out infinite;
+      pointer-events: none;
+    }
+
+    .media-slip:nth-child(2) .media-icon::after,
+    .media-slip:nth-child(2) .media-line::after { animation-delay: -1.6s; }
+    .media-slip:nth-child(3) .media-icon::after,
+    .media-slip:nth-child(3) .media-line::after { animation-delay: -3.2s; }
+    .media-icon svg { width: 100%; height: 100%; transition: transform .3s var(--ease-out); }
     .media-label { color: var(--signal); font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
-    .media-slip strong { display: block; margin-top: 5px; font-size: 16px; line-height: 1.35; }
-    .media-slip i {
+    .media-slip strong { display: block; margin-top: 5px; font-size: 16px; line-height: 1.35; transition: color .3s var(--ease-out); }
+    .media-line {
+      position: relative;
       display: block;
-      width: var(--meter, 76%);
-      height: 2px;
-      margin-top: 10px;
-      background: rgba(49, 87, 213, .35);
+      overflow: hidden;
+      width: min(100%, 420px);
+      height: 3px;
+      margin-top: 11px;
+      background: rgba(49, 87, 213, .14);
       border-radius: 999px;
+    }
+
+    .media-line::after {
+      position: absolute;
+      inset: 0;
+      content: "";
+      background: linear-gradient(90deg, transparent, var(--signal) 34%, #91a6f8 68%, transparent);
+      transform: translateX(-100%);
+      animation: line-flow 4.8s var(--ease-out) infinite;
+    }
+
+    @media (hover: hover) {
+      .media-slip:hover .media-icon {
+        background: #fff;
+        box-shadow: 0 0 0 8px rgba(49, 87, 213, .12), 0 8px 20px rgba(49, 87, 213, .14);
+        transform: scale(1.08);
+      }
+      .media-slip:hover .media-icon svg { transform: scale(1.08); }
+      .media-slip:hover strong { color: var(--signal); }
+      .media-slip:hover .media-line::after { animation-duration: 1.5s; }
     }
 
     .card {
@@ -737,6 +787,9 @@
 
     @keyframes ambient-drift { to { transform: translate3d(6vw, 4vw, 0) scale(1.08); } }
     @keyframes visual-enter { from { opacity: 0; transform: translateY(16px) rotate(1deg); } }
+    @keyframes rail-flow { to { background-position: 0 220%; } }
+    @keyframes line-flow { 0%, 18% { transform: translateX(-100%); } 72%, 100% { transform: translateX(100%); } }
+    @keyframes node-breathe { 50% { opacity: .18; transform: scale(1.12); } }
     @keyframes card-enter { from { opacity: 0; transform: translateY(10px); } }
     @keyframes result-reveal { from { opacity: 0; transform: translateY(10px); } }
     @keyframes dialog-in { from { opacity: 0; transform: translateY(14px); } }
@@ -811,7 +864,10 @@
 <body>
   <main class="shell">
     <header class="topbar">
-      <div class="brand"><img class="brand-mark" src="/static/mark.svg" alt=""><span class="brand-wordmark">Linkdrop</span></div>
+      <div class="brand" aria-label="Linkdrop">
+        <img class="brand-symbol" src="/static/mark.svg" alt="">
+        <img class="brand-wordmark" src="/static/wordmark.svg" alt="">
+      </div>
     </header>
 
     <section class="hero">
@@ -831,15 +887,15 @@
       <div class="transfer-visual" aria-hidden="true">
         <div class="media-slip">
           <span class="media-icon"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="13" height="12" rx="3" stroke="currentColor" stroke-width="2.2"/><path d="m16 10 5-3v10l-5-3Z" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></svg></span>
-          <span class="media-label">Video</span><strong>Pilih resolusi hingga 4K</strong><i style="--meter: 86%"></i>
+          <span class="media-label">Video</span><strong>Pilih resolusi hingga 4K</strong><i class="media-line"></i>
         </div>
         <div class="media-slip">
           <span class="media-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M9 18V6l10-2v12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="18" r="3" stroke="currentColor" stroke-width="2.2"/><circle cx="16" cy="16" r="3" stroke="currentColor" stroke-width="2.2"/></svg></span>
-          <span class="media-label">Audio</span><strong>MP3 hingga 320 kbps</strong><i style="--meter: 68%"></i>
+          <span class="media-label">Audio</span><strong>MP3 hingga 320 kbps</strong><i class="media-line"></i>
         </div>
         <div class="media-slip">
           <span class="media-icon"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="3" stroke="currentColor" stroke-width="2.2"/><circle cx="16.5" cy="8.5" r="1.5" fill="currentColor"/><path d="m5.5 17 4.5-5 3.2 3 2-2 3.3 4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-          <span class="media-label">Foto</span><strong>Simpan file tanpa kompresi ulang</strong><i style="--meter: 76%"></i>
+          <span class="media-label">Foto</span><strong>Simpan file tanpa kompresi ulang</strong><i class="media-line"></i>
         </div>
       </div>
     </section>

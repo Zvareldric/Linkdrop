@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
-  <title id="title">Linkdrop</title>
-  <path fill="#3157D5" d="M40 36h44v92l44 38 44-38V36h44v126c0 32-26 58-58 58h-16v-44h16c8 0 14-6 14-14v-8l-44 38-44-38v8c0 8 6 14 14 14h16v44H98c-32 0-58-26-58-58V36Z"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 163 171" role="img" aria-labelledby="title">
+  <title id="title">Linkdrop dropcut mark</title>
+  <path fill="#3157D5" fill-rule="evenodd" d="M46 108L54 96L62 88L68 85L79 84L93 90L97 96L123 121L123 3L151 3L155 5L160 12L160 141L155 154L150 160L148 160L145 164L135 168L118 167L111 163L103 154L101 154L101 152L97 150L97 148L65 116L52 110L46 110Z M99 166L99 168L29 168L18 164L10 157L6 151L3 141L3 25L38 25L39 130L46 134L69 134Z"/>
 </svg>
