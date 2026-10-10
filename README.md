@@ -8,7 +8,7 @@
 
 Linkdrop is a responsive web app for inspecting and downloading public media you own or are allowed to download. It supports YouTube, Instagram, TikTok, X, Facebook, and other sites supported by [yt-dlp](https://github.com/yt-dlp/yt-dlp).
 
-![Linkdrop interface animation](docs/assets/linkdrop-demo.gif)
+![Linkdrop interface animation](docs/assets/linkdrop-demo-en.gif)
 
 > Use Linkdrop only for your own media, public-domain media, or content you have permission to download. It does not bypass DRM, private access, CAPTCHA, or platform restrictions.
 

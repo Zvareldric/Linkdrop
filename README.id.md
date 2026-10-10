@@ -8,7 +8,7 @@
 
 Linkdrop adalah aplikasi web responsif untuk menganalisis dan mengunduh media publik yang Anda miliki atau berhak unduh. Linkdrop mendukung YouTube, Instagram, TikTok, X, Facebook, serta situs lain yang didukung [yt-dlp](https://github.com/yt-dlp/yt-dlp).
 
-![Animasi antarmuka Linkdrop](docs/assets/linkdrop-demo.gif)
+![Animasi antarmuka Linkdrop](docs/assets/linkdrop-demo-id.gif)
 
 > Gunakan Linkdrop hanya untuk media milik sendiri, domain publik, atau media yang sudah Anda peroleh izinnya. Linkdrop tidak menembus DRM, akses privat, CAPTCHA, maupun pembatasan platform.
 
