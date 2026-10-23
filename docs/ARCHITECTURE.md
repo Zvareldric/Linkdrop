@@ -47,7 +47,7 @@ When `progress=1` is present, progress frames, metadata, data chunks, and comple
 1. The browser reuses `POST /api/info` with at most two concurrent analyses.
 2. The user explicitly selects the items and output choices to include.
 3. The browser groups signed choices at 80% of the safe package limit and sends at most 30 tokens to `POST /api/batch/download`.
-4. The server validates every token before processing starts, then downloads each selected link sequentially with the existing media pipeline.
+4. The server validates every token before processing starts, then processes the selected links with the existing media pipeline, `BATCH_CONCURRENCY` (default 2) at a time.
 5. Successful files are stored without recompression in a flat ZIP. Multi-item galleries are placed in a unique folder in the outer ZIP instead of becoming nested ZIP files; individual failures are written to `linkdrop-report.txt` without stopping other items.
 6. Available disk space is divided by 2.5 and capped by `MAX_MEDIA_BYTES` to reserve room for source, conversion, and archive files.
 7. Each ZIP is streamed with the same framed progress protocol and all temporary data is removed afterward.
@@ -70,11 +70,24 @@ The default container uses one Gunicorn worker with four threads. Multiple worke
 
 Resolution options come from extractor metadata. Linkdrop does not upscale video or reconstruct detail lost by the source. Photo files are copied without recompression whenever the extractor exposes the original asset.
 
-### Burned-in subtitles
+### Original quality first
+
+Every re-encode loses some quality, so Linkdrop avoids it wherever the source allows:
+
+- **Video.** When the source offers H.264 at a resolution, that stream is downloaded and merged into MP4 without re-encoding. Where only VP9 or AV1 exists (common above 1080p on YouTube), the interface offers two choices: the original streams in WebM or MKV with no conversion, and an MP4 copy re-encoded to H.264 for devices such as iPhone and older TVs.
+- **Audio.** "Original audio" downloads the best source audio stream untouched; when that is not M4A, an original M4A choice is offered for Apple devices. MP3 choices remain available and are labeled as converted.
+- **Photos.** Photo files are always copied without recompression.
+
+Re-encodes that still happen use x264 `-preset fast -crf 18`. Faster presets were measured to lower quality, so they are not used by default.
+
+### Subtitles
 
 When the source offers Indonesian or English subtitles, `/api/info` returns a signed subtitle choice for each language. Creator-provided tracks are preferred; automatic captions are offered only in the video's original spoken language, never YouTube's machine translations. The browser appends the selected subtitle token to the video download URL, and the server rejects it unless it was issued for the same video.
 
-During the download, yt-dlp fetches the track (json3 on YouTube). Linkdrop converts json3 to SRT, ending each automatic-caption line when the next begins so rolling captions show one clean line instead of stacked duplicates. FFmpeg then renders the text into the picture with libass in a white-on-translucent-black style similar to YouTube's captions. Burning always re-encodes the video, so it takes longer than a plain download and reports its progress as a percentage. Container images install `fonts-dejavu-core` because libass cannot draw text without a font. Multi-link packages do not offer subtitles.
+During the download, yt-dlp fetches the track (json3 on YouTube). Linkdrop converts json3 to SRT, ending each automatic-caption line when the next begins so rolling captions show one clean line instead of stacked duplicates. Two display modes follow:
+
+- **Toggleable (default).** FFmpeg copies the audio and video streams unchanged and adds the subtitle as a separate track (`mov_text` in MP4, SRT in MKV, WebVTT in WebM) tagged with its language and marked as the default track. This takes seconds, and the video is bit-identical to the source. Most players show it as a CC option; some Android gallery apps ignore subtitle tracks.
+- **Burned in.** FFmpeg renders the text into the picture with libass in a white-on-translucent-black style similar to YouTube's captions. This always re-encodes the video to H.264 MP4, so it takes longer, slightly lowers quality, and reports its progress as a percentage. Container images install `fonts-dejavu-core` because libass cannot draw text without a font. Multi-link packages do not offer subtitles.
 
 ### Playback compatibility
 

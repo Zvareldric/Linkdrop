@@ -45,6 +45,7 @@ SAMPLE_INFO = {
         },
         {
             "format_id": "140",
+            "ext": "m4a",
             "vcodec": "none",
             "acodec": "aac",
             "filesize": 2_000_000,
@@ -218,9 +219,13 @@ class AppTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(labels, ["360p", "1080p"])
-        self.assertEqual(len(payload["choices"]["audio"]), 3)
-        self.assertEqual(payload["choices"]["audio"][0]["label"], "MP3 128 kbps")
-        self.assertEqual(payload["choices"]["audio"][0]["detail"], "MP3 · 128 kbps · sekitar 1.9 MB")
+        self.assertEqual(
+            [choice["label"] for choice in payload["choices"]["audio"]],
+            ["Audio asli", "MP3 128 kbps", "MP3 192 kbps", "MP3 320 kbps"],
+        )
+        self.assertEqual(payload["choices"]["audio"][0]["detail"], "M4A (AAC) · 128 kbps · tanpa konversi · sekitar 1.9 MB")
+        self.assertEqual(payload["choices"]["audio"][1]["detail"], "MP3 · 128 kbps · dikonversi · sekitar 1.9 MB")
+        self.assertEqual(len({choice["id"] for choice in payload["choices"]["audio"]}), 4)
         self.assertTrue(payload["choices"]["video"][0]["download_url"].startswith("/api/download/"))
         self.assertTrue(payload["choices"]["video"][0]["token"])
         self.assertEqual(payload["choices"]["video"][0]["estimated_bytes"], 4_000_000)
@@ -833,7 +838,25 @@ class SubtitleTests(unittest.TestCase):
         response = self.client.get(f"/api/download/{video_token}?subtitle={subtitle_token}")
         self.assertEqual(response.status_code, 200)
         b"".join(response.response)
-        self.assertEqual(captured["subtitle"], {"lang": "id-orig", "automatic": True})
+        self.assertEqual(captured["subtitle"], {"lang": "id-orig", "automatic": True, "burn": False})
+
+    @patch("app._validate_public_url", side_effect=lambda value: value)
+    @patch("app._download_with_retry")
+    def test_download_endpoint_accepts_burned_subtitle_mode(self, download_mock, _validate):
+        captured = {}
+
+        def fake_download(payload, folder, progress=None, cancelled=None):
+            captured.update(payload)
+            result = folder / "video.mp4"
+            result.write_bytes(b"video")
+            return result
+
+        download_mock.side_effect = fake_download
+        video_token = media_app._make_token(self.url, "video", height=720)
+        subtitle_token = media_app._make_token(self.url, "subtitle", lang="en", automatic=False)
+        response = self.client.get(f"/api/download/{video_token}?subtitle={subtitle_token}&subtitle_mode=burn")
+        b"".join(response.response)
+        self.assertTrue(captured["subtitle"]["burn"])
 
     @patch("app._validate_public_url", side_effect=lambda value: value)
     def test_subtitle_token_must_match_the_video(self, _validate):
@@ -909,7 +932,7 @@ class SubtitleTests(unittest.TestCase):
             captured["subtitle"] = subtitle.read_text(encoding="utf-8")
             return path
 
-        payload = {"url": self.url, "kind": "video", "height": 720, "subtitle": {"lang": "en-US", "automatic": False}}
+        payload = {"url": self.url, "kind": "video", "height": 720, "subtitle": {"lang": "en-US", "automatic": False, "burn": True}}
         with tempfile.TemporaryDirectory() as folder, \
                 patch.object(media_app.yt_dlp, "YoutubeDL", FakeYoutubeDL), \
                 patch.object(media_app, "_ensure_compatible_mp4", fake_burn):
@@ -951,6 +974,242 @@ class SubtitleTests(unittest.TestCase):
             self.assertGreater(bottom_brightness(result), 200)
             self.assertFalse((folder / "Video [abc].linkdrop.mp4").exists())
             self.assertEqual(events[0]["phase"], "Menempelkan subtitle ke video")
+
+
+class FakeYoutubeDL:
+    """Records yt-dlp options and writes the files a download would create."""
+
+    created_files = ()
+    last_options = None
+
+    def __init__(self, options):
+        FakeYoutubeDL.last_options = options
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def download(self, urls):
+        folder = Path(FakeYoutubeDL.last_options["outtmpl"]).parent
+        for name, content in FakeYoutubeDL.created_files:
+            (folder / name).write_bytes(content)
+
+
+def video_packets_md5(path):
+    return subprocess.run(
+        ["ffmpeg", "-v", "error", "-i", str(path), "-map", "0:v", "-c", "copy", "-f", "md5", "-"],
+        check=True, capture_output=True, text=True,
+    ).stdout.strip()
+
+
+class OriginalQualityTests(unittest.TestCase):
+    url = "https://www.youtube.com/watch?v=abc123"
+
+    def test_resolutions_without_h264_offer_original_and_mp4_copies(self):
+        info = {
+            **SAMPLE_INFO,
+            "formats": SAMPLE_INFO["formats"] + [
+                {"format_id": "313", "height": 2160, "vcodec": "vp9", "acodec": "none", "filesize": 90_000_000, "ext": "webm"},
+            ],
+        }
+        video = media_app._build_choices(self.url, info)["video"]
+        self.assertEqual([choice["label"] for choice in video], ["360p", "1080p", "2160p", "2160p MP4"])
+        self.assertIn("MP4 · kualitas asli", video[1]["detail"])
+        self.assertIn("tanpa konversi", video[2]["detail"])
+        self.assertIn("dikonversi ulang", video[3]["detail"])
+        self.assertEqual(media_app._signer.loads(video[2]["token"])["container"], "original")
+        self.assertNotIn("container", media_app._signer.loads(video[3]["token"]))
+        self.assertEqual(len({choice["id"] for choice in video}), 4)
+
+    def test_best_original_audio_and_m4a_are_offered_without_conversion(self):
+        info = {
+            **SAMPLE_INFO,
+            "formats": SAMPLE_INFO["formats"] + [
+                {"format_id": "251", "vcodec": "none", "acodec": "opus", "abr": 160, "ext": "webm", "filesize": 2_500_000},
+            ],
+        }
+        audio = media_app._build_choices(self.url, info)["audio"]
+        self.assertEqual([choice["label"] for choice in audio][:2], ["Audio asli", "Audio asli M4A"])
+        self.assertTrue(audio[0]["detail"].startswith("Opus (WebM) · 160 kbps · tanpa konversi"))
+        self.assertEqual(media_app._signer.loads(audio[0]["token"])["format_id"], "251")
+        self.assertEqual(media_app._signer.loads(audio[1]["token"])["format_id"], "140")
+
+    def test_original_video_download_skips_conversion(self):
+        FakeYoutubeDL.created_files = [("Video [abc].webm", b"webm")]
+        payload = {"url": self.url, "kind": "video", "height": 2160, "container": "original"}
+        with tempfile.TemporaryDirectory() as folder, \
+                patch.object(media_app.yt_dlp, "YoutubeDL", FakeYoutubeDL), \
+                patch.object(media_app, "_ensure_compatible_mp4") as convert:
+            result = media_app._download_video_or_audio(payload, Path(folder))
+        convert.assert_not_called()
+        self.assertEqual(result.name, "Video [abc].webm")
+        self.assertEqual(FakeYoutubeDL.last_options["merge_output_format"], "webm/mkv")
+        self.assertTrue(FakeYoutubeDL.last_options["format"].startswith("bv*[height=2160]+ba"))
+
+    def test_original_audio_download_uses_signed_format_without_postprocessing(self):
+        FakeYoutubeDL.created_files = [("Audio [abc].webm", b"opus")]
+        payload = {"url": self.url, "kind": "audio", "codec": "source", "format_id": "251"}
+        with tempfile.TemporaryDirectory() as folder, patch.object(media_app.yt_dlp, "YoutubeDL", FakeYoutubeDL):
+            media_app._download_video_or_audio(payload, Path(folder))
+        self.assertEqual(FakeYoutubeDL.last_options["format"], "251/bestaudio/best")
+        self.assertNotIn("postprocessors", FakeYoutubeDL.last_options)
+
+    def test_unsafe_format_id_falls_back_to_best_audio(self):
+        FakeYoutubeDL.created_files = [("Audio [abc].m4a", b"aac")]
+        payload = {"url": self.url, "kind": "audio", "codec": "source", "format_id": "251+bv*"}
+        with tempfile.TemporaryDirectory() as folder, patch.object(media_app.yt_dlp, "YoutubeDL", FakeYoutubeDL):
+            media_app._download_video_or_audio(payload, Path(folder))
+        self.assertEqual(FakeYoutubeDL.last_options["format"], "bestaudio/best")
+
+    def test_selectable_subtitle_is_added_without_burning(self):
+        FakeYoutubeDL.created_files = [
+            ("Video [abc].mp4", b"video"),
+            ("Video [abc].id-orig.json3", json.dumps(AUTO_JSON3).encode()),
+        ]
+        calls = {}
+
+        def fake_compatible(path, progress=None, cancelled=None, subtitle=None):
+            calls["compatible_subtitle"] = subtitle
+            return path
+
+        def fake_embed(path, subtitle, language, progress=None, cancelled=None):
+            calls["embed"] = (subtitle.name, language)
+            return path
+
+        payload = {"url": self.url, "kind": "video", "height": 720,
+                   "subtitle": {"lang": "id-orig", "automatic": True, "burn": False}}
+        with tempfile.TemporaryDirectory() as folder, \
+                patch.object(media_app.yt_dlp, "YoutubeDL", FakeYoutubeDL), \
+                patch.object(media_app, "_ensure_compatible_mp4", fake_compatible), \
+                patch.object(media_app, "_embed_subtitle_track", fake_embed):
+            media_app._download_video_or_audio(payload, Path(folder))
+        self.assertIsNone(calls["compatible_subtitle"])
+        self.assertEqual(calls["embed"], ("linkdrop-subtitle.srt", "id-orig"))
+
+    @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "FFmpeg is required")
+    def test_embedded_subtitle_keeps_video_bit_identical(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            video = folder / "-Judul: Video [abc].mp4"
+            subprocess.run(
+                ["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=10:duration=2",
+                 "-f", "lavfi", "-i", "sine=duration=2", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                 "-c:a", "aac", "-shortest", f"./{video.name}"],
+                check=True, cwd=folder,
+            )
+            before = video_packets_md5(video)
+            subtitle = folder / "linkdrop-subtitle.srt"
+            subtitle.write_text("1\n00:00:00,000 --> 00:00:02,000\nHalo\n", encoding="utf-8")
+
+            result = media_app._embed_subtitle_track(video, subtitle, "id-orig")
+
+            self.assertEqual(result, video)
+            self.assertEqual(video_packets_md5(result), before)
+            probe = subprocess.run(
+                ["ffprobe", "-v", "error", "-select_streams", "s",
+                 "-show_entries", "stream=codec_name:stream_tags=language:stream_disposition=default",
+                 "-of", "json", str(result)],
+                check=True, capture_output=True, text=True,
+            )
+            stream = json.loads(probe.stdout)["streams"][0]
+            self.assertEqual(stream["codec_name"], "mov_text")
+            self.assertEqual(stream["tags"]["language"], "ind")
+            self.assertEqual(stream["disposition"]["default"], 1)
+
+
+class ParallelDownloadTests(unittest.TestCase):
+    def test_byte_budget_is_shared(self):
+        budget = media_app._ByteBudget(10)
+        budget.take(6)
+        self.assertEqual(budget.remaining(), 4)
+        with self.assertRaisesRegex(media_app.UserFacingError, "batas"):
+            budget.take(5)
+
+    def test_gallery_items_download_in_parallel_and_keep_order(self):
+        info = {"title": "Carousel", "entries": [
+            {"ext": "jpg", "url": f"https://cdn.example.com/{index}.jpg"} for index in range(1, 7)
+        ]}
+        active = {"now": 0, "peak": 0}
+        lock = threading.Lock()
+
+        def fake_remote(source, destination, budget, progress=None, cancelled=None):
+            with lock:
+                active["now"] += 1
+                active["peak"] = max(active["peak"], active["now"])
+            time.sleep(0.2)
+            destination.write_bytes(source[0].encode())
+            budget.take(10)
+            with lock:
+                active["now"] -= 1
+            return 10
+
+        events = []
+        started = time.monotonic()
+        with tempfile.TemporaryDirectory() as folder, \
+                patch.object(media_app, "_extract_info", return_value=info), \
+                patch.object(media_app, "_download_remote", fake_remote):
+            title, paths = media_app._download_gallery_items(
+                {"url": "https://example.com/post"}, Path(folder), 1000, events.append
+            )
+            contents = [path.read_text() for path in paths]
+        elapsed = time.monotonic() - started
+
+        self.assertEqual(title, "Carousel")
+        self.assertEqual([path.name for path in paths], [f"{index:02d}.jpg" for index in range(1, 7)])
+        self.assertEqual(contents, [f"https://cdn.example.com/{index}.jpg" for index in range(1, 7)])
+        self.assertEqual(active["peak"], media_app.GALLERY_CONCURRENCY)
+        self.assertLess(elapsed, 0.2 * 6 * 0.75)
+        self.assertEqual(events[-1]["detail"].split(" ")[0], "6")
+
+    def test_gallery_failure_stops_remaining_items(self):
+        info = {"entries": [{"ext": "jpg", "url": f"https://cdn.example.com/{index}.jpg"} for index in range(1, 9)]}
+        started = []
+
+        def fake_remote(source, destination, budget, progress=None, cancelled=None):
+            started.append(source[0])
+            if source[0].endswith("/1.jpg"):
+                raise media_app.UserFacingError("Sumber menolak akses.")
+            for _ in range(20):
+                if cancelled.is_set():
+                    raise media_app.UserFacingError("Unduhan dibatalkan.")
+                time.sleep(0.01)
+            destination.write_bytes(b"x")
+            return 1
+
+        with tempfile.TemporaryDirectory() as folder, \
+                patch.object(media_app, "_extract_info", return_value=info), \
+                patch.object(media_app, "_download_remote", fake_remote):
+            with self.assertRaisesRegex(media_app.UserFacingError, "menolak"):
+                media_app._download_gallery_items({"url": "https://example.com/post"}, Path(folder), 1000)
+        self.assertLess(len(started), 8)
+
+    @patch("app._validate_public_url", side_effect=lambda value: value)
+    @patch("app._download_with_retry")
+    def test_batch_items_run_in_parallel(self, download_mock, _validate):
+        def slow_download(payload, folder, progress, cancelled):
+            time.sleep(0.3)
+            result = folder / f"{payload['url'].rsplit('/', 1)[-1]}.mp4"
+            result.write_bytes(b"media")
+            return result
+
+        download_mock.side_effect = slow_download
+        tokens = [
+            media_app._make_token(f"https://example.com/video{index}", "video", height=720, estimated_bytes=10)
+            for index in range(1, 5)
+        ]
+        client = media_app.app.test_client()
+        media_app._rate_limiter.reset()
+        started = time.monotonic()
+        response = client.post("/api/batch/download", json={"tokens": tokens})
+        frames = parse_progress_frames(response.data)
+        elapsed = time.monotonic() - started
+
+        archive_bytes = b"".join(payload for kind, payload in frames if kind == b"D")
+        with zipfile.ZipFile(io.BytesIO(archive_bytes)) as bundle:
+            self.assertEqual(sorted(bundle.namelist()), [f"video{index}.mp4" for index in range(1, 5)])
+        self.assertLess(elapsed, 0.3 * 4 * 0.8)
 
 
 if __name__ == "__main__":
