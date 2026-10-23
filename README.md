@@ -93,6 +93,7 @@ Open [http://127.0.0.1:5000](http://127.0.0.1:5000). Linux users should install 
 
 - [Installation](docs/INSTALLATION.md) — Windows/Docker Desktop first, then macOS and Linux.
 - [Private phone access](docs/TAILSCALE.md) — access Linkdrop safely through Tailscale.
+- [Public access without a VPS](docs/CLOUDFLARE_TUNNEL.md) — publish Linkdrop from your computer with Cloudflare Tunnel and a password.
 - [Deployment](docs/DEPLOYMENT.md) — persistent hosting and operational limits.
 - [Architecture](docs/ARCHITECTURE.md) — media flow, temporary files, and security model.
 

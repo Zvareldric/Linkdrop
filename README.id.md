@@ -93,6 +93,7 @@ Buka [http://127.0.0.1:5000](http://127.0.0.1:5000). Pengguna Linux perlu memasa
 
 - [Instalasi](docs/INSTALLATION.id.md) — Windows/Docker Desktop terlebih dahulu, lalu macOS dan Linux.
 - [Akses privat dari ponsel](docs/TAILSCALE.id.md) — akses aman melalui Tailscale.
+- [Akses publik tanpa VPS](docs/CLOUDFLARE_TUNNEL.id.md) — publikasikan Linkdrop dari komputer sendiri dengan Cloudflare Tunnel dan kata sandi.
 - [Deployment](docs/DEPLOYMENT.md) — hosting persisten dan batas operasional.
 - [Arsitektur](docs/ARCHITECTURE.md) — alur media, file sementara, dan model keamanan.
 
