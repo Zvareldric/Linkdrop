@@ -17,6 +17,7 @@ import tempfile
 import threading
 import time
 import zipfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import parse_qsl, quote, urlencode, urljoin, urlparse, urlunparse
@@ -46,10 +47,14 @@ MAX_BATCH_ITEMS = 30
 BATCH_WARNING_ITEMS = 10
 BATCH_DISK_FACTOR = 2.5
 MAX_GALLERY_ITEMS = 20
+GALLERY_CONCURRENCY = max(1, int(os.environ.get("GALLERY_CONCURRENCY", 4)))
+BATCH_CONCURRENCY = max(1, int(os.environ.get("BATCH_CONCURRENCY", 2)))
 FFMPEG_TIMEOUT = int(os.environ.get("FFMPEG_TIMEOUT", 60 * 60))
 SUBTITLE_LANGUAGES = ("id", "en")
 SUBTITLE_SUFFIXES = {".json3", ".srt", ".vtt", ".ass", ".ssa", ".srv1", ".srv2", ".srv3", ".ttml"}
 BURNABLE_SUBTITLE_SUFFIXES = {".srt", ".vtt", ".ass", ".ssa"}
+SUBTITLE_STREAM_CODECS = {".mp4": "mov_text", ".m4v": "mov_text", ".mov": "mov_text", ".mkv": "srt", ".webm": "webvtt"}
+SUBTITLE_LANGUAGE_TAGS = {"id": ("ind", "Indonesia"), "en": ("eng", "English")}
 # White text on a translucent black box, close to YouTube's default captions.
 SUBTITLE_STYLE = (
     "Fontname=DejaVu Sans,Fontsize=16,PrimaryColour=&H00FFFFFF,"
@@ -655,14 +660,27 @@ def _video_format_selector(height: int) -> str:
     )
 
 
+def _original_video_format_selector(height: int) -> str:
+    """Pick the best source streams at a resolution without caring about codec."""
+
+    return f"bv*[height={height}]+ba/b[height={height}]/bv*[height<={height}]+ba/b[height<={height}]"
+
+
+def _is_h264(fmt: dict) -> bool:
+    return str(fmt.get("vcodec") or "").lower().startswith(("h264", "avc"))
+
+
+AUDIO_FORMAT_NAMES = {"m4a": "M4A (AAC)", "webm": "Opus (WebM)", "opus": "Opus", "mp3": "MP3", "ogg": "Ogg Vorbis"}
+
+
 def _make_token(url: str, kind: str, **options) -> str:
     return _signer.dumps({"url": url, "kind": kind, **options})
 
 
-def _choice(url: str, kind: str, label: str, detail: str, **options) -> dict:
+def _choice(url: str, kind: str, label: str, detail: str, choice_id: str | None = None, **options) -> dict:
     token = _make_token(url, kind, **options)
     return {
-        "id": f"{kind}:{options.get('height') or options.get('codec') or options.get('bitrate') or 'original'}",
+        "id": choice_id or f"{kind}:{options.get('height') or options.get('codec') or options.get('bitrate') or 'original'}",
         "label": label,
         "detail": detail,
         "estimated_bytes": options.get("estimated_bytes"),
@@ -696,51 +714,67 @@ def _build_choices(url: str, info: dict) -> dict:
     for height in heights:
         estimated_bytes = _estimated_video_size(formats, height, info.get("duration"))
         size = _pretty_bytes(estimated_bytes)
-        detail = "MP4" + (f" · sekitar {size}" if size else " · ukuran dihitung saat mengunduh")
+        size_text = f" · sekitar {size}" if size else " · ukuran dihitung saat mengunduh"
+        has_h264 = any(_is_h264(fmt) and fmt.get("height") == height for fmt in formats)
+        if has_h264:
+            # The source already offers H.264 here, so the MP4 is the original stream.
+            video_choices.append(_choice(
+                url, "video", f"{height}p", "MP4 · kualitas asli" + size_text,
+                choice_id=f"video:{height}", height=height, estimated_bytes=estimated_bytes,
+            ))
+            continue
+        # Only VP9/AV1 exists at this resolution (common above 1080p). Keep the
+        # source streams untouched, and offer an MP4 copy for older devices.
         video_choices.append(_choice(
-            url,
-            "video",
-            f"{height}p",
-            detail,
-            height=height,
+            url, "video", f"{height}p", "Kualitas asli · WebM/MKV · tanpa konversi" + size_text,
+            choice_id=f"video:{height}:original", height=height, container="original",
             estimated_bytes=estimated_bytes,
         ))
+        video_choices.append(_choice(
+            url, "video", f"{height}p MP4", "MP4 untuk iPhone/TV · dikonversi ulang · lebih lama",
+            choice_id=f"video:{height}:mp4", height=height, estimated_bytes=estimated_bytes,
+        ))
 
+    duration = info.get("duration")
+    audio_choices = []
     source_audio = _best_audio_format(formats)
+    if source_audio:
+        m4a_audio = max(
+            (fmt for fmt in formats if fmt.get("vcodec") == "none" and fmt.get("ext") == "m4a"
+             and fmt.get("acodec") not in (None, "none")),
+            key=lambda fmt: fmt.get("abr") or fmt.get("tbr") or 0,
+            default=None,
+        )
+        originals = [source_audio]
+        if m4a_audio and m4a_audio.get("format_id") != source_audio.get("format_id"):
+            originals.append(m4a_audio)
+        for fmt in originals:
+            extension = str(fmt.get("ext") or "").lower()
+            name = AUDIO_FORMAT_NAMES.get(extension, extension.upper() or "Audio")
+            bitrate = fmt.get("abr") or fmt.get("tbr")
+            estimated_bytes = _format_size(fmt, duration)
+            size = _pretty_bytes(estimated_bytes)
+            detail = " · ".join(filter(None, [
+                name,
+                f"{round(bitrate)} kbps" if bitrate else None,
+                "tanpa konversi",
+                f"sekitar {size}" if size else None,
+            ]))
+            is_best = fmt is source_audio
+            audio_choices.append(_choice(
+                url, "audio", "Audio asli" if is_best else "Audio asli M4A", detail,
+                choice_id="audio:source" if is_best else "audio:source-m4a",
+                codec="source", format_id=str(fmt.get("format_id") or ""), estimated_bytes=estimated_bytes,
+            ))
 
-    def mp3_detail(bitrate: int) -> str:
-        size = _pretty_bytes(int(bitrate * 1000 * info["duration"] / 8)) if info.get("duration") else None
-        return f"MP3 · {bitrate} kbps" + (f" · sekitar {size}" if size else "")
-
-    audio_choices = [
-        _choice(
-            url,
-            "audio",
-            "MP3 128 kbps",
-            mp3_detail(128),
-            codec="mp3",
-            bitrate=128,
-            estimated_bytes=int(128 * 1000 * info["duration"] / 8) if info.get("duration") else None,
-        ),
-        _choice(
-            url,
-            "audio",
-            "MP3 192 kbps",
-            mp3_detail(192),
-            codec="mp3",
-            bitrate=192,
-            estimated_bytes=int(192 * 1000 * info["duration"] / 8) if info.get("duration") else None,
-        ),
-        _choice(
-            url,
-            "audio",
-            "MP3 320 kbps",
-            mp3_detail(320),
-            codec="mp3",
-            bitrate=320,
-            estimated_bytes=int(320 * 1000 * info["duration"] / 8) if info.get("duration") else None,
-        ),
-    ] if source_audio else []
+        for bitrate in (128, 192, 320):
+            estimated_bytes = int(bitrate * 1000 * duration / 8) if duration else None
+            size = _pretty_bytes(estimated_bytes)
+            audio_choices.append(_choice(
+                url, "audio", f"MP3 {bitrate} kbps",
+                f"MP3 · {bitrate} kbps · dikonversi" + (f" · sekitar {size}" if size else ""),
+                choice_id=f"audio:mp3:{bitrate}", codec="mp3", bitrate=bitrate, estimated_bytes=estimated_bytes,
+            ))
 
     return {"video": video_choices, "audio": audio_choices, "photo": []}
 
@@ -974,6 +1008,59 @@ def _prepare_subtitle(folder: Path, subtitle: dict) -> Path:
     raise UserFacingError("Format subtitle dari platform ini belum didukung.")
 
 
+def _embed_subtitle_track(
+    path: Path,
+    subtitle: Path,
+    language: str,
+    progress=None,
+    cancelled: threading.Event | None = None,
+) -> Path:
+    """Add the subtitle as a selectable track without re-encoding audio or video."""
+
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        raise UserFacingError("FFmpeg tidak tersedia untuk menambahkan subtitle.")
+    suffix = path.suffix.lower()
+    if suffix not in SUBTITLE_STREAM_CODECS:
+        suffix = ".mkv"
+    codec = SUBTITLE_STREAM_CODECS[suffix]
+    tag, title = SUBTITLE_LANGUAGE_TAGS.get(language.split("-")[0].lower(), ("und", "Subtitle"))
+    if progress:
+        progress({
+            "percent": 92,
+            "phase": "Menambahkan subtitle",
+            "detail": "Menyisipkan track subtitle tanpa mengubah video…",
+        })
+
+    output = path.with_name(f"{path.stem}.linkdrop{suffix}")
+    command = [
+        ffmpeg, "-y",
+        "-i", f"./{path.name}",
+        "-i", f"./{subtitle.name}",
+        "-map", "0:v", "-map", "0:a?", "-map", "1:0",
+        "-c", "copy", "-c:s", codec,
+        "-metadata:s:s:0", f"language={tag}",
+        "-metadata:s:s:0", f"title={title}",
+        "-disposition:s:0", "default",
+    ]
+    if codec == "mov_text":
+        command += ["-movflags", "+faststart"]
+    command.append(f"./{output.name}")
+    try:
+        _run_media_command(command, cancelled, cwd=path.parent)
+    except subprocess.CalledProcessError as exc:
+        output.unlink(missing_ok=True)
+        raise UserFacingError("Subtitle gagal ditambahkan ke video.") from exc
+    except BaseException:
+        output.unlink(missing_ok=True)
+        raise
+
+    path.unlink()
+    final = path.with_suffix(suffix)
+    output.replace(final)
+    return final
+
+
 def _ensure_compatible_mp4(
     path: Path,
     progress=None,
@@ -1152,11 +1239,17 @@ def _download_video_or_audio(
         height = int(payload.get("height", 0))
         if height < 1 or height > 4320:
             raise UserFacingError("Pilihan kualitas video tidak valid.")
-        options.update({
-            "format": _video_format_selector(height),
-            "merge_output_format": "mp4",
-            "postprocessor_args": {"Merger": ["-movflags", "+faststart"]},
-        })
+        if payload.get("container") == "original":
+            options.update({
+                "format": _original_video_format_selector(height),
+                "merge_output_format": "webm/mkv",
+            })
+        else:
+            options.update({
+                "format": _video_format_selector(height),
+                "merge_output_format": "mp4",
+                "postprocessor_args": {"Merger": ["-movflags", "+faststart"]},
+            })
         if subtitle := payload.get("subtitle"):
             options.update({
                 "writesubtitles": not subtitle["automatic"],
@@ -1167,6 +1260,9 @@ def _download_video_or_audio(
     elif kind == "audio":
         codec = payload.get("codec")
         options["format"] = "bestaudio/best"
+        format_id = str(payload.get("format_id") or "")
+        if codec == "source" and re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", format_id):
+            options["format"] = f"{format_id}/bestaudio/best"
         if codec == "mp3":
             bitrate = int(payload.get("bitrate", 0))
             if bitrate not in {128, 192, 320}:
@@ -1187,8 +1283,15 @@ def _download_video_or_audio(
 
     result = _find_downloaded_file(folder)
     if kind == "video":
-        subtitle_file = _prepare_subtitle(folder, payload["subtitle"]) if payload.get("subtitle") else None
-        result = _ensure_compatible_mp4(result, progress, cancelled, subtitle_file)
+        subtitle = payload.get("subtitle")
+        subtitle_file = _prepare_subtitle(folder, subtitle) if subtitle else None
+        if subtitle_file and subtitle.get("burn"):
+            result = _ensure_compatible_mp4(result, progress, cancelled, subtitle_file)
+        else:
+            if payload.get("container") != "original":
+                result = _ensure_compatible_mp4(result, progress, cancelled)
+            if subtitle_file:
+                result = _embed_subtitle_track(result, subtitle_file, subtitle["lang"], progress, cancelled)
     if result.stat().st_size > MAX_MEDIA_BYTES:
         raise UserFacingError(f"Ukuran hasil melebihi batas {MAX_MEDIA_BYTES // (1024 * 1024)} MB.")
     if progress:
@@ -1244,10 +1347,39 @@ def _best_progressive_video_source(entry: dict) -> tuple[str, dict, str] | None:
     return selected["url"], selected.get("http_headers") or {}, selected.get("ext") or "mp4"
 
 
+class _ByteBudget:
+    """Byte allowance shared by downloads that run at the same time."""
+
+    def __init__(self, limit: int):
+        self.limit = limit
+        self.used = 0
+        self._lock = threading.Lock()
+
+    def remaining(self) -> int:
+        with self._lock:
+            return self.limit - self.used
+
+    def take(self, size: int) -> None:
+        with self._lock:
+            if self.used + size > self.limit:
+                raise UserFacingError("Ukuran media melebihi batas server.")
+            self.used += size
+
+
+class _AnyEvent:
+    """Read-only view that is set when any of the given events is set."""
+
+    def __init__(self, *events):
+        self._events = [event for event in events if event is not None]
+
+    def is_set(self) -> bool:
+        return any(event.is_set() for event in self._events)
+
+
 def _download_remote(
     source: tuple[str, dict, str],
     destination: Path,
-    budget: int,
+    budget: int | _ByteBudget,
     progress=None,
     cancelled: threading.Event | None = None,
 ) -> int:
@@ -1263,10 +1395,12 @@ def _download_remote(
 def _fetch_remote(
     source: tuple[str, dict, str],
     destination: Path,
-    budget: int,
+    budget: int | _ByteBudget,
     progress=None,
     cancelled: threading.Event | None = None,
 ) -> int:
+    if not isinstance(budget, _ByteBudget):
+        budget = _ByteBudget(budget)
     source_url, headers, _ = source
     _validate_public_url(source_url)
     downloaded = 0
@@ -1295,7 +1429,7 @@ def _fetch_remote(
     with response:
         response.raise_for_status()
         content_length = int(response.headers.get("content-length") or 0)
-        if content_length and content_length > budget:
+        if content_length and content_length > budget.remaining():
             raise UserFacingError("Ukuran media melebihi batas server.")
         with destination.open("wb") as output:
             for chunk in response.iter_content(CHUNK_SIZE):
@@ -1303,9 +1437,8 @@ def _fetch_remote(
                     raise UserFacingError("Unduhan dibatalkan.")
                 if not chunk:
                     continue
+                budget.take(len(chunk))
                 downloaded += len(chunk)
-                if downloaded > budget:
-                    raise UserFacingError("Ukuran media melebihi batas server.")
                 output.write(chunk)
                 if progress:
                     progress(min(downloaded / content_length, 1) if content_length else 0)
@@ -1325,38 +1458,63 @@ def _download_gallery_items(
     entries = _entries(info)[:MAX_GALLERY_ITEMS]
     if not entries:
         raise UserFacingError("Tidak ada media yang dapat diunduh.")
-    item_paths = []
-    used_bytes = 0
 
+    items = []
     for index, entry in enumerate(entries, start=1):
-        if cancelled and cancelled.is_set():
-            raise UserFacingError("Unduhan dibatalkan.")
         source = _best_image_source(entry) if _is_image(entry) else _best_progressive_video_source(entry)
         if not source:
             raise UserFacingError(f"Format item ke-{index} tidak dapat diunduh.")
         extension = secure_filename(source[2].lower()) or ("jpg" if _is_image(entry) else "mp4")
-        destination = folder / f"{index:02d}.{extension}"
-        start_percent = 5 + ((index - 1) / len(entries)) * 82
-        end_percent = 5 + (index / len(entries)) * 82
+        items.append((index, source, folder / f"{index:02d}.{extension}"))
 
-        def item_progress(fraction, item=index):
-            if progress:
-                progress({
-                    "percent": round(start_percent + (end_percent - start_percent) * fraction, 1),
-                    "phase": f"Mengunduh item {item} dari {len(entries)}",
-                    "detail": "Mengambil media asli…",
-                })
+    # Files are copied as-is, so the time goes into waiting on the network.
+    # Several items are fetched at once; they share one byte budget.
+    shared_budget = _ByteBudget(budget)
+    stop = threading.Event()
+    should_stop = _AnyEvent(cancelled, stop)
+    fractions = {index: 0.0 for index, _, _ in items}
+    state_lock = threading.Lock()
+    finished = {"count": 0}
 
-        used_bytes += _download_remote(
+    def report(index: int, fraction: float) -> None:
+        if not progress:
+            return
+        with state_lock:
+            fractions[index] = fraction
+            overall = sum(fractions.values()) / len(items)
+            completed = finished["count"]
+        progress({
+            "percent": round(5 + overall * 82, 1),
+            "phase": f"Mengunduh {len(items)} item",
+            "detail": f"{completed} dari {len(items)} selesai · mengambil media asli…",
+        })
+
+    def fetch(index: int, source: tuple[str, dict, str], destination: Path) -> None:
+        if should_stop.is_set():
+            raise UserFacingError("Unduhan dibatalkan.")
+        _download_remote(
             source,
             destination,
-            budget - used_bytes,
-            progress=item_progress,
-            cancelled=cancelled,
+            shared_budget,
+            progress=lambda fraction: report(index, fraction),
+            cancelled=should_stop,
         )
-        item_paths.append(destination)
+        with state_lock:
+            finished["count"] += 1
+        report(index, 1.0)
 
-    return info.get("title") or info.get("id") or "media", item_paths
+    with ThreadPoolExecutor(max_workers=min(GALLERY_CONCURRENCY, len(items)), thread_name_prefix="linkdrop-gallery") as pool:
+        futures = [pool.submit(fetch, *item) for item in items]
+        try:
+            for future in as_completed(futures):
+                future.result()
+        except BaseException:
+            stop.set()
+            for future in futures:
+                future.cancel()
+            raise
+
+    return info.get("title") or info.get("id") or "media", [destination for _, _, destination in items]
 
 
 def _download_gallery(
@@ -1476,74 +1634,93 @@ def _download_batch(
 
     archive = folder / f"linkdrop-{time.strftime('%Y-%m-%d')}-part-{package_number}.zip"
     used_names = set()
-    failures = []
-    completed = 0
-    archived_bytes = 0
+    failures = {}
+    state = {"completed": 0, "archived_bytes": 0}
+    item_percents = {index: 0.0 for index in range(1, len(payloads) + 1)}
+    archive_lock = threading.Lock()
+    progress_lock = threading.Lock()
+    stop = threading.Event()
+    should_stop = _AnyEvent(cancelled, stop)
 
-    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_STORED, allowZip64=True) as bundle:
-        for index, payload in enumerate(payloads, start=1):
-            if cancelled and cancelled.is_set():
-                raise UserFacingError("Unduhan dibatalkan.")
-            item_folder = folder / f"item-{index:02d}"
-            item_folder.mkdir()
+    def process(index: int, payload: dict, bundle: zipfile.ZipFile) -> None:
+        if should_stop.is_set():
+            raise UserFacingError("Unduhan dibatalkan.")
+        item_folder = folder / f"item-{index:02d}"
+        item_folder.mkdir()
 
-            def item_progress(event, item=index):
-                if not progress:
-                    return
-                item_percent = max(0, min(float(event.get("percent") or 0), 100))
-                overall = ((item - 1) + item_percent / 100) / len(payloads) * 88
-                progress({
-                    "percent": round(overall, 1),
-                    "item_index": item,
-                    "item_count": len(payloads),
-                    "item_percent": round(item_percent, 1),
-                    "phase": f"{event.get('phase') or 'Memproses media'} · {item}/{len(payloads)}",
-                    "detail": event.get("detail") or "",
-                })
+        def item_progress(event):
+            if not progress:
+                return
+            item_percent = max(0, min(float(event.get("percent") or 0), 100))
+            with progress_lock:
+                item_percents[index] = item_percent
+                overall = sum(item_percents.values()) / 100 / len(payloads) * 88
+            progress({
+                "percent": round(overall, 1),
+                "item_index": index,
+                "item_count": len(payloads),
+                "item_percent": round(item_percent, 1),
+                "phase": f"{event.get('phase') or 'Memproses media'} · {index}/{len(payloads)}",
+                "detail": event.get("detail") or "",
+            })
 
-            try:
-                if payload["kind"] == "gallery":
-                    title, results = _download_gallery_items(
-                        payload,
-                        item_folder,
-                        storage_limit - archived_bytes,
-                        item_progress,
-                        cancelled,
-                    )
-                    result_size = sum(result.stat().st_size for result in results)
-                    if archived_bytes + result_size > storage_limit:
-                        raise UserFacingError("Ukuran aktual media melewati sisa kapasitas paket.")
-                    if len(results) == 1:
-                        result = results[0]
-                        bundle.write(result, arcname=_unique_archive_name(result.name, used_names))
-                    else:
-                        archive_folder = _unique_archive_folder(title, used_names)
-                        for result in results:
-                            bundle.write(result, arcname=f"{archive_folder}/{result.name}")
-                    archived_bytes += result_size
+        try:
+            if payload["kind"] == "gallery":
+                with archive_lock:
+                    remaining = storage_limit - state["archived_bytes"]
+                title, results = _download_gallery_items(payload, item_folder, remaining, item_progress, should_stop)
+            else:
+                results = [_download_with_retry(payload, item_folder, item_progress, should_stop)]
+                title = None
+            result_size = sum(result.stat().st_size for result in results)
+            with archive_lock:
+                if state["archived_bytes"] + result_size > storage_limit:
+                    raise UserFacingError("Ukuran aktual media melewati sisa kapasitas paket.")
+                if len(results) == 1:
+                    bundle.write(results[0], arcname=_unique_archive_name(results[0].name, used_names))
                 else:
-                    result = _download_with_retry(payload, item_folder, item_progress, cancelled)
-                    result_size = result.stat().st_size
-                    if archived_bytes + result_size > storage_limit:
-                        raise UserFacingError("Ukuran aktual media melewati sisa kapasitas paket.")
-                    bundle.write(result, arcname=_unique_archive_name(result.name, used_names))
-                    archived_bytes += result_size
-                completed += 1
-            except OSError:
+                    archive_folder = _unique_archive_folder(title, used_names)
+                    for result in results:
+                        bundle.write(result, arcname=f"{archive_folder}/{result.name}")
+                state["archived_bytes"] += result_size
+                state["completed"] += 1
+        except requests.RequestException as exc:
+            failures[index] = f"Media {index}: {_friendly_error(exc)}"
+        except OSError:
+            raise
+        except Exception as exc:
+            if should_stop.is_set():
                 raise
-            except Exception as exc:
-                if cancelled and cancelled.is_set():
-                    raise
-                failures.append(f"Media {index}: {_friendly_error(exc)}")
-            finally:
-                shutil.rmtree(item_folder, ignore_errors=True)
+            failures[index] = f"Media {index}: {_friendly_error(exc)}"
+        finally:
+            shutil.rmtree(item_folder, ignore_errors=True)
+            with progress_lock:
+                item_percents[index] = 100.0
+
+    # Items run a few at a time: downloads mostly wait on the network, while
+    # the limit keeps CPU and temporary disk use bounded during conversions.
+    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_STORED, allowZip64=True) as bundle:
+        with ThreadPoolExecutor(
+            max_workers=min(BATCH_CONCURRENCY, len(payloads)),
+            thread_name_prefix="linkdrop-batch",
+        ) as pool:
+            futures = [pool.submit(process, index, payload, bundle) for index, payload in enumerate(payloads, start=1)]
+            try:
+                for future in as_completed(futures):
+                    future.result()
+            except BaseException:
+                stop.set()
+                for future in futures:
+                    future.cancel()
+                raise
 
         if failures:
             bundle.writestr(
                 "linkdrop-report.txt",
-                "Beberapa media tidak dapat diproses:\n\n" + "\n".join(failures),
+                "Beberapa media tidak dapat diproses:\n\n" + "\n".join(failures[index] for index in sorted(failures)),
             )
 
+    completed = state["completed"]
     if not completed:
         archive.unlink(missing_ok=True)
         raise UserFacingError("Tidak ada media yang berhasil diproses dalam paket ini.")
@@ -1853,6 +2030,7 @@ def download(token: str):
         payload = _decode_download_token(token)
         if subtitle_token := request.args.get("subtitle"):
             payload["subtitle"] = _decode_subtitle_token(subtitle_token, payload)
+            payload["subtitle"]["burn"] = request.args.get("subtitle_mode") == "burn"
     except SignatureExpired:
         return jsonify({"error": "Link unduhan kedaluwarsa. Analisis link kembali."}), 410
     except BadSignature:
