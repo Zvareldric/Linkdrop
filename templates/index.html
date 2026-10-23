@@ -703,6 +703,32 @@
     .tab.active { color: white; background: var(--signal); }
     .tab:disabled { display: none; }
 
+    .subtitle-picker {
+      display: grid;
+      gap: 8px;
+      margin-top: 13px;
+      padding: 12px;
+      background: white;
+      border: 1.5px solid var(--line);
+      border-radius: 15px;
+    }
+    .subtitle-picker[hidden] { display: none; }
+    .subtitle-title { font-size: 12px; font-weight: 800; }
+    .subtitle-options { display: flex; flex-wrap: wrap; gap: 6px; }
+    .subtitle-option {
+      min-height: 36px;
+      padding: 7px 12px;
+      color: var(--ink);
+      background: transparent;
+      border: 1.5px solid var(--line);
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .subtitle-option[aria-pressed="true"] { color: white; background: var(--ink); border-color: var(--ink); }
+    .subtitle-hint { color: var(--muted); font-size: 11px; line-height: 1.45; }
+
     .choices {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1036,7 +1062,7 @@
     }
 
     @media (pointer: coarse) {
-      .button, .tab, .choice { min-height: 48px; }
+      .button, .tab, .choice, .subtitle-option { min-height: 48px; }
       .choice:hover, .button:hover { transform: none; }
     }
 
@@ -1131,6 +1157,11 @@
             <button class="tab" type="button" data-kind="video">Video</button>
             <button class="tab" type="button" data-kind="audio">Audio</button>
             <button class="tab" type="button" data-kind="photo" data-i18n="photo">Foto</button>
+          </div>
+          <div class="subtitle-picker" id="subtitlePicker" role="group" aria-labelledby="subtitleTitle" hidden>
+            <span class="subtitle-title" id="subtitleTitle" data-i18n="subtitle">Subtitle</span>
+            <div class="subtitle-options" id="subtitleOptions"></div>
+            <small class="subtitle-hint" data-i18n="subtitleHint">Subtitle ditempel permanen di video seperti saat ditonton dengan CC. Prosesnya lebih lama karena video dikonversi ulang.</small>
           </div>
           <div class="choices" id="choices"></div>
         </div>
@@ -1304,7 +1335,9 @@
         selectMedia: "Pilih media {number}", readyToChoose: "siap dipilih", analyzing: "Sedang menganalisis…", waiting: "Menunggu…", analyzingButton: "Menganalisis…",
         cannotProcess: "Link tidak dapat diproses.", noFormat: "Tidak ada format yang dapat diunduh.", analyzeNext: "Analisis {count} link berikutnya", validLink: "Masukkan setidaknya satu link HTTP/HTTPS yang valid.",
         savePackageFirst: "Simpan paket yang sudah siap sebelum menyiapkan paket berikutnya.", packageLabel: "paket {number}", packageReady: "Paket siap disimpan", checking: "Memeriksa…", genericError: "Terjadi kesalahan. Silakan coba lagi.",
-        detectedLinks: "{count} link terdeteksi. Periksa daftar lalu tekan “Analisis”.", clipboardDenied: "Browser tidak memberi izin membaca clipboard. Tempel link secara manual."
+        detectedLinks: "{count} link terdeteksi. Periksa daftar lalu tekan “Analisis”.", clipboardDenied: "Browser tidak memberi izin membaca clipboard. Tempel link secara manual.",
+        subtitle: "Subtitle", noSubtitle: "Tanpa subtitle", subtitle_id: "Indonesia", subtitle_en: "Inggris", autoCaption: "{language} (otomatis)",
+        subtitleHint: "Subtitle ditempel permanen di video seperti saat ditonton dengan CC. Prosesnya lebih lama karena video dikonversi ulang.", withSubtitle: "{label} + subtitle {language}"
       },
       en: {
         publicMedia: "Public media", languageChoice: "Language selection", kicker: "Download media in its real quality!",
@@ -1330,12 +1363,15 @@
         selectMedia: "Select media {number}", readyToChoose: "ready to choose", analyzing: "Analyzing…", waiting: "Waiting…", analyzingButton: "Analyzing…",
         cannotProcess: "The link could not be processed.", noFormat: "No downloadable format is available.", analyzeNext: "Analyze the next {count} links", validLink: "Enter at least one valid HTTP/HTTPS link.",
         savePackageFirst: "Save the package that is ready before preparing the next one.", packageLabel: "package {number}", packageReady: "Package ready to save", checking: "Checking…", genericError: "Something went wrong. Please try again.",
-        detectedLinks: "{count} links detected. Review the list, then press “Analyze”.", clipboardDenied: "The browser did not allow clipboard access. Paste the link manually."
+        detectedLinks: "{count} links detected. Review the list, then press “Analyze”.", clipboardDenied: "The browser did not allow clipboard access. Paste the link manually.",
+        subtitle: "Subtitles", noSubtitle: "No subtitles", subtitle_id: "Indonesian", subtitle_en: "English", autoCaption: "{language} (auto-generated)",
+        subtitleHint: "Subtitles are burned into the video, just like watching with CC on. Processing takes longer because the video is re-encoded.", withSubtitle: "{label} + {language} subtitles"
       }
     };
     let currentLanguage = "id";
     let mediaData = null;
     let activeKind = "video";
+    let selectedSubtitle = null;
     let downloadActive = false;
     let activeDownloadController = null;
     let preparedDownload = null;
@@ -1362,6 +1398,7 @@
       });
       try { localStorage.setItem("linkdrop-language", currentLanguage); } catch {}
       if (batchItems.length) renderBatchItems();
+      if (mediaData && result.style.display === "grid") renderChoices(activeKind);
       if (mediaData) {
         const metadata = [mediaData.uploader, formatDuration(mediaData.duration), mediaData.item_count > 1 ? `${mediaData.item_count} ${currentLanguage === "en" ? "items" : "item"}` : null].filter(Boolean);
         document.getElementById("mediaMeta").textContent = metadata.join(" · ") || t("formatReady");
@@ -1754,7 +1791,8 @@
       });
       choicesBox.replaceChildren();
 
-      (mediaData.choices[kind] || []).forEach(choice => {
+      renderSubtitles();
+      (mediaData.choices[kind] || []).map(withSelectedSubtitle).forEach(choice => {
         const link = document.createElement("a");
         link.className = "choice";
         link.href = choice.download_url;
@@ -1769,8 +1807,46 @@
       });
     }
 
+    function subtitleName(subtitle) {
+      const language = t(`subtitle_${subtitle.language}`);
+      return subtitle.automatic ? t("autoCaption", { language }) : language;
+    }
+
+    function withSelectedSubtitle(choice) {
+      if (activeKind !== "video" || !selectedSubtitle) return choice;
+      const separator = choice.download_url.includes("?") ? "&" : "?";
+      return {
+        ...choice,
+        label: t("withSubtitle", { label: choice.label, language: subtitleName(selectedSubtitle) }),
+        download_url: `${choice.download_url}${separator}subtitle=${encodeURIComponent(selectedSubtitle.token)}`
+      };
+    }
+
+    function renderSubtitles() {
+      const picker = document.getElementById("subtitlePicker");
+      const options = document.getElementById("subtitleOptions");
+      const subtitles = mediaData?.subtitles || [];
+      picker.hidden = activeKind !== "video" || !subtitles.length;
+      options.replaceChildren();
+      if (picker.hidden) return;
+
+      [null, ...subtitles].forEach(subtitle => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "subtitle-option";
+        button.textContent = subtitle ? subtitleName(subtitle) : t("noSubtitle");
+        button.setAttribute("aria-pressed", String((selectedSubtitle?.id ?? null) === (subtitle?.id ?? null)));
+        button.addEventListener("click", () => {
+          selectedSubtitle = subtitle;
+          renderChoices(activeKind);
+        });
+        options.appendChild(button);
+      });
+    }
+
     function renderResult(data) {
       mediaData = data;
+      selectedSubtitle = null;
       disposePreparedDownload();
       downloadProgress.classList.remove("visible", "error");
       const thumbnail = document.getElementById("thumbnail");
