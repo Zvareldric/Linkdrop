@@ -34,8 +34,10 @@ Linkdrop adalah aplikasi web responsif untuk menganalisis dan mengunduh media pu
 ## Yang dapat dilakukan
 
 - Menampilkan format dan resolusi asli yang tersedia dari link publik.
-- Mengunduh video, audio sumber atau MP3, dan foto asli; post multi-foto dikemas sebagai ZIP.
-- Menempelkan subtitle Indonesia atau Inggris langsung ke video jika sumbernya menyediakan.
+- Mengunduh video, audio asli atau MP3, dan foto asli; post multi-foto dikemas sebagai ZIP.
+- Secara default mempertahankan stream asli tanpa konversi: video asli (termasuk WebM/MKV di atas 1080p), audio asli, dan foto asli.
+- Menambahkan subtitle Indonesia atau Inggris jika sumbernya menyediakan, sebagai track yang bisa dinyalakan tanpa konversi atau ditempel permanen ke video.
+- Mengunduh item carousel dan paket beberapa link secara paralel.
 - Menampilkan progres unduhan dan memberi pilihan lokasi penyimpanan setelah file siap.
 - Menyediakan mode beberapa link opsional yang menghasilkan satu paket ZIP.
 - Nyaman digunakan di desktop maupun ponsel, dalam Bahasa Indonesia dan Inggris.

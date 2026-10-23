@@ -728,6 +728,8 @@
     }
     .subtitle-option[aria-pressed="true"] { color: white; background: var(--ink); border-color: var(--ink); }
     .subtitle-hint { color: var(--muted); font-size: 11px; line-height: 1.45; }
+    .subtitle-mode { display: grid; gap: 8px; padding-top: 4px; }
+    .subtitle-mode[hidden] { display: none; }
 
     .choices {
       display: grid;
@@ -1111,7 +1113,7 @@
         </div>
         <div class="media-slip">
           <span class="media-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M9 18V6l10-2v12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="18" r="3" stroke="currentColor" stroke-width="2.2"/><circle cx="16" cy="16" r="3" stroke="currentColor" stroke-width="2.2"/></svg></span>
-          <span class="media-label">Audio</span><strong data-i18n="audioFeature">MP3 hingga 320 kbps</strong><i class="media-line"></i>
+          <span class="media-label">Audio</span><strong data-i18n="audioFeature">Audio asli atau MP3</strong><i class="media-line"></i>
         </div>
         <div class="media-slip">
           <span class="media-icon"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="3" stroke="currentColor" stroke-width="2.2"/><circle cx="16.5" cy="8.5" r="1.5" fill="currentColor"/><path d="m5.5 17 4.5-5 3.2 3 2-2 3.3 4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
@@ -1161,7 +1163,11 @@
           <div class="subtitle-picker" id="subtitlePicker" role="group" aria-labelledby="subtitleTitle" hidden>
             <span class="subtitle-title" id="subtitleTitle" data-i18n="subtitle">Subtitle</span>
             <div class="subtitle-options" id="subtitleOptions"></div>
-            <small class="subtitle-hint" data-i18n="subtitleHint">Subtitle ditempel permanen di video seperti saat ditonton dengan CC. Prosesnya lebih lama karena video dikonversi ulang.</small>
+            <div class="subtitle-mode" id="subtitleModeGroup" role="group" aria-labelledby="subtitleModeTitle" hidden>
+              <span class="subtitle-title" id="subtitleModeTitle" data-i18n="subtitleMode">Cara tampil</span>
+              <div class="subtitle-options" id="subtitleModeOptions"></div>
+            </div>
+            <small class="subtitle-hint" id="subtitleHint"></small>
           </div>
           <div class="choices" id="choices"></div>
         </div>
@@ -1314,7 +1320,7 @@
       id: {
         publicMedia: "Media publik", languageChoice: "Pilihan bahasa", kicker: "Unduh media dengan kualitas real!",
         heroTitle: "Pilih kualitasnya. Simpan medianya.", heroLead: "Tempel link dari platform favoritmu, lihat format dan perkiraan ukuran file, lalu unduh video, audio, atau foto yang kamu perlukan.",
-        popularPlatforms: "Platform populer", andMore: "dan lainnya", videoFeature: "Pilih resolusi hingga 4K", audioFeature: "MP3 hingga 320 kbps", photo: "Foto", photoFeature: "Simpan file tanpa kompresi ulang",
+        popularPlatforms: "Platform populer", andMore: "dan lainnya", videoFeature: "Pilih resolusi hingga 4K", audioFeature: "Audio asli atau MP3", photo: "Foto", photoFeature: "Simpan file tanpa kompresi ulang",
         downloadType: "Jenis unduhan", singleLink: "Satu link", multipleLinks: "Beberapa link", pasteMediaLink: "Tempel link media", paste: "Tempel", viewOptions: "Lihat pilihan",
         publicSupport: "Mendukung konten publik dari platform yang kompatibel.", maxFile: "Maks file", findingFormats: "Mencari kualitas dan format yang tersedia…", mediaPreview: "Pratinjau media",
         pasteMultipleLinks: "Tempel beberapa link", oneLinkPerLine: "Satu link per baris", analyze: "Analisis", maxMediaPerPackage: "Maksimal {{ max_batch_items }} media per paket. Link selebihnya masuk antrean berikutnya.",
@@ -1337,12 +1343,16 @@
         savePackageFirst: "Simpan paket yang sudah siap sebelum menyiapkan paket berikutnya.", packageLabel: "paket {number}", packageReady: "Paket siap disimpan", checking: "Memeriksa…", genericError: "Terjadi kesalahan. Silakan coba lagi.",
         detectedLinks: "{count} link terdeteksi. Periksa daftar lalu tekan “Analisis”.", clipboardDenied: "Browser tidak memberi izin membaca clipboard. Tempel link secara manual.",
         subtitle: "Subtitle", noSubtitle: "Tanpa subtitle", subtitle_id: "Indonesia", subtitle_en: "Inggris", autoCaption: "{language} (otomatis)",
-        subtitleHint: "Subtitle ditempel permanen di video seperti saat ditonton dengan CC. Prosesnya lebih lama karena video dikonversi ulang.", withSubtitle: "{label} + subtitle {language}"
+        subtitleMode: "Cara tampil", subtitleSoft: "Bisa dinyalakan · kualitas asli", subtitleBurn: "Permanen · lebih lama",
+        subtitleChooseHint: "Pilih bahasa jika ingin menyertakan subtitle.",
+        subtitleSoftHint: "Video tidak dikonversi ulang, jadi kualitasnya sama persis dengan aslinya dan prosesnya cepat. Subtitle muncul sebagai pilihan CC di VLC, iPhone, Mac, dan sebagian besar pemutar; beberapa galeri Android tidak menampilkannya.",
+        subtitleBurnHint: "Subtitle digambar langsung ke video sehingga selalu tampil di pemutar mana pun. Video dikonversi ulang, jadi prosesnya lebih lama dan kualitasnya sedikit turun.",
+        withSubtitle: "{label} + subtitle {language}", withBurnedSubtitle: "{label} + subtitle {language} permanen"
       },
       en: {
         publicMedia: "Public media", languageChoice: "Language selection", kicker: "Download media in its real quality!",
         heroTitle: "Choose the quality. Save the media.", heroLead: "Paste a link from your favorite platform, review its formats and estimated file size, then download the video, audio, or photo you need.",
-        popularPlatforms: "Popular platforms", andMore: "and more", videoFeature: "Choose resolutions up to 4K", audioFeature: "MP3 up to 320 kbps", photo: "Photo", photoFeature: "Save files without recompression",
+        popularPlatforms: "Popular platforms", andMore: "and more", videoFeature: "Choose resolutions up to 4K", audioFeature: "Original audio or MP3", photo: "Photo", photoFeature: "Save files without recompression",
         downloadType: "Download type", singleLink: "Single link", multipleLinks: "Multiple links", pasteMediaLink: "Paste a media link", paste: "Paste", viewOptions: "View options",
         publicSupport: "Supports public content from compatible platforms.", maxFile: "Max file", findingFormats: "Finding available quality and formats…", mediaPreview: "Media preview",
         pasteMultipleLinks: "Paste multiple links", oneLinkPerLine: "One link per line", analyze: "Analyze", maxMediaPerPackage: "Up to {{ max_batch_items }} media per package. Extra links move to the next queue.",
@@ -1365,13 +1375,18 @@
         savePackageFirst: "Save the package that is ready before preparing the next one.", packageLabel: "package {number}", packageReady: "Package ready to save", checking: "Checking…", genericError: "Something went wrong. Please try again.",
         detectedLinks: "{count} links detected. Review the list, then press “Analyze”.", clipboardDenied: "The browser did not allow clipboard access. Paste the link manually.",
         subtitle: "Subtitles", noSubtitle: "No subtitles", subtitle_id: "Indonesian", subtitle_en: "English", autoCaption: "{language} (auto-generated)",
-        subtitleHint: "Subtitles are burned into the video, just like watching with CC on. Processing takes longer because the video is re-encoded.", withSubtitle: "{label} + {language} subtitles"
+        subtitleMode: "Display", subtitleSoft: "Toggleable · original quality", subtitleBurn: "Burned in · slower",
+        subtitleChooseHint: "Choose a language to include subtitles.",
+        subtitleSoftHint: "The video is not re-encoded, so it keeps exactly the original quality and finishes quickly. Subtitles appear as a CC option in VLC, iPhone, Mac, and most players; some Android galleries do not show them.",
+        subtitleBurnHint: "Subtitles are drawn into the picture, so they always show in any player. The video is re-encoded, which takes longer and slightly lowers quality.",
+        withSubtitle: "{label} + {language} subtitles", withBurnedSubtitle: "{label} + burned-in {language} subtitles"
       }
     };
     let currentLanguage = "id";
     let mediaData = null;
     let activeKind = "video";
     let selectedSubtitle = null;
+    let subtitleMode = "soft";
     let downloadActive = false;
     let activeDownloadController = null;
     let preparedDownload = null;
@@ -1815,10 +1830,11 @@
     function withSelectedSubtitle(choice) {
       if (activeKind !== "video" || !selectedSubtitle) return choice;
       const separator = choice.download_url.includes("?") ? "&" : "?";
+      const burn = subtitleMode === "burn";
       return {
         ...choice,
-        label: t("withSubtitle", { label: choice.label, language: subtitleName(selectedSubtitle) }),
-        download_url: `${choice.download_url}${separator}subtitle=${encodeURIComponent(selectedSubtitle.token)}`
+        label: t(burn ? "withBurnedSubtitle" : "withSubtitle", { label: choice.label, language: subtitleName(selectedSubtitle) }),
+        download_url: `${choice.download_url}${separator}subtitle=${encodeURIComponent(selectedSubtitle.token)}${burn ? "&subtitle_mode=burn" : ""}`
       };
     }
 
@@ -1842,11 +1858,32 @@
         });
         options.appendChild(button);
       });
+
+      const modeGroup = document.getElementById("subtitleModeGroup");
+      const modeOptions = document.getElementById("subtitleModeOptions");
+      modeGroup.hidden = !selectedSubtitle;
+      modeOptions.replaceChildren();
+      [["soft", "subtitleSoft"], ["burn", "subtitleBurn"]].forEach(([mode, labelKey]) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "subtitle-option";
+        button.textContent = t(labelKey);
+        button.setAttribute("aria-pressed", String(subtitleMode === mode));
+        button.addEventListener("click", () => {
+          subtitleMode = mode;
+          renderChoices(activeKind);
+        });
+        modeOptions.appendChild(button);
+      });
+      document.getElementById("subtitleHint").textContent = !selectedSubtitle
+        ? t("subtitleChooseHint")
+        : t(subtitleMode === "burn" ? "subtitleBurnHint" : "subtitleSoftHint");
     }
 
     function renderResult(data) {
       mediaData = data;
       selectedSubtitle = null;
+      subtitleMode = "soft";
       disposePreparedDownload();
       downloadProgress.classList.remove("visible", "error");
       const thumbnail = document.getElementById("thumbnail");
