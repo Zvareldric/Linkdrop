@@ -40,7 +40,7 @@ Flask API ─── yt-dlp ─── FFmpeg
 6. The result is streamed to browser-managed temporary storage and exposed through a save dialog. The dialog starts with the server-provided filename, permits editing the name, and preserves the original extension before invoking the browser or operating system save flow.
 7. Temporary files are deleted after completion, cancellation, or failure.
 
-When `progress=1` is present, progress frames, metadata, data chunks, and completion status travel in the same response. This keeps the operation bound to one application instance.
+When `progress=1` is present, progress frames, metadata, data chunks, and completion status travel in the same response. This keeps the operation bound to one application instance. During quiet phases such as a long conversion, the last progress frame is repeated every 15 seconds so that proxies do not close an idle stream. If the browser disconnects before the work finishes, the temporary directory is removed as soon as the worker stops.
 
 ### Multi-link package
 
@@ -77,11 +77,12 @@ An `.mp4` extension does not guarantee that a device can decode the streams insi
 ## Security boundaries
 
 - Signed tokens expire and cannot be modified without invalidating the signature.
-- URL validation reduces server-side request forgery risk.
+- URL validation rejects private destinations before work starts. While yt-dlp and the photo downloader run, every DNS lookup made by the request thread drops private and local addresses, so redirects, manifests, fragments, and DNS answers that change after validation cannot reach the internal network. A configured outbound proxy resolves hostnames itself and must enforce the same rule.
+- An optional password (`ACCESS_PASSWORD`) and per-client rate limits protect public deployments.
 - Secrets and cookies remain server-side.
 - Response headers disable caching and MIME sniffing for generated downloads.
 - DRM, private access, and anti-bot controls are outside the application's scope.
 
 ## Scaling path
 
-The current architecture targets personal or low-volume deployments. A public, high-volume service should separate API and media workers, add a queue, store outputs in expiring object storage, enforce per-user quotas, and apply rate limiting before accepting untrusted traffic.
+The current architecture targets personal or low-volume deployments. A public, high-volume service should separate API and media workers, add a queue, store outputs in expiring object storage, enforce per-user quotas, and move rate limiting to shared storage before accepting untrusted traffic.
