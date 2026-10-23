@@ -7,6 +7,7 @@ import json
 import mimetypes
 import os
 import queue
+import re
 import secrets
 import shutil
 import socket
@@ -46,6 +47,14 @@ BATCH_WARNING_ITEMS = 10
 BATCH_DISK_FACTOR = 2.5
 MAX_GALLERY_ITEMS = 20
 FFMPEG_TIMEOUT = int(os.environ.get("FFMPEG_TIMEOUT", 60 * 60))
+SUBTITLE_LANGUAGES = ("id", "en")
+SUBTITLE_SUFFIXES = {".json3", ".srt", ".vtt", ".ass", ".ssa", ".srv1", ".srv2", ".srv3", ".ttml"}
+BURNABLE_SUBTITLE_SUFFIXES = {".srt", ".vtt", ".ass", ".ssa"}
+# White text on a translucent black box, close to YouTube's default captions.
+SUBTITLE_STYLE = (
+    "Fontname=DejaVu Sans,Fontsize=16,PrimaryColour=&H00FFFFFF,"
+    "OutlineColour=&H80000000,BorderStyle=3,Outline=1,Shadow=0,MarginV=18"
+)
 ACCESS_USERNAME = os.environ.get("ACCESS_USERNAME", "linkdrop").strip() or "linkdrop"
 ACCESS_PASSWORD = os.environ.get("ACCESS_PASSWORD", "").strip()
 TRUSTED_PROXY_HEADER = os.environ.get("TRUSTED_PROXY_HEADER", "").strip()
@@ -400,6 +409,8 @@ def _friendly_error(exc: Exception) -> str:
         return message
     if PRIVATE_NETWORK_MESSAGE.lower() in lowered:
         return PRIVATE_NETWORK_MESSAGE
+    if "unable to download video subtitles" in lowered:
+        return "Subtitle gagal diambil dari platform. Coba lagi nanti atau unduh tanpa subtitle."
     if "unsupported url" in lowered and "tiktok.com" in lowered and "/photo/" in lowered:
         return "Postingan foto TikTok belum didukung oleh extractor saat ini. Coba link TikTok video."
     if "unsupported url" in lowered:
@@ -734,11 +745,63 @@ def _build_choices(url: str, info: dict) -> dict:
     return {"video": video_choices, "audio": audio_choices, "photo": []}
 
 
+def _subtitle_track_key(tracks: dict, language: str, automatic: bool) -> str | None:
+    """Return the track key for a language, or None when it is unavailable.
+
+    Automatic captions only count in the video's original spoken language
+    (yt-dlp marks it ``<lang>-orig``); YouTube's machine translations into
+    other languages are not offered.
+    """
+
+    if automatic:
+        key = f"{language}-orig"
+        return key if tracks.get(key) else None
+    if tracks.get(language):
+        return language
+    for key in sorted(tracks):
+        if key.split("-")[0].lower() == language and tracks[key]:
+            return key
+    return None
+
+
+def _subtitle_choices(url: str, info: dict) -> list[dict]:
+    manual = info.get("subtitles") or {}
+    automatic = info.get("automatic_captions") or {}
+    choices = []
+    for language in SUBTITLE_LANGUAGES:
+        is_automatic = False
+        key = _subtitle_track_key(manual, language, automatic=False)
+        if not key:
+            key = _subtitle_track_key(automatic, language, automatic=True)
+            is_automatic = bool(key)
+        if key:
+            choices.append({
+                "id": f"subtitle:{language}",
+                "language": language,
+                "automatic": is_automatic,
+                "token": _make_token(url, "subtitle", lang=key, automatic=is_automatic),
+            })
+    return choices
+
+
+def _decode_subtitle_token(token: str, video_payload: dict) -> dict:
+    subtitle = _signer.loads(token, max_age=TOKEN_MAX_AGE)
+    if subtitle.get("kind") != "subtitle" or video_payload.get("kind") != "video":
+        raise UserFacingError("Pilihan subtitle tidak valid.")
+    if subtitle.get("url") != video_payload.get("url"):
+        raise UserFacingError("Pilihan subtitle tidak cocok dengan video ini.")
+    language = str(subtitle.get("lang") or "")
+    if not re.fullmatch(r"[A-Za-z0-9-]{1,32}", language):
+        raise UserFacingError("Pilihan subtitle tidak valid.")
+    return {"lang": language, "automatic": bool(subtitle.get("automatic"))}
+
+
 def _media_payload(url: str, info: dict) -> dict:
     entries = _entries(info)
     thumbnail = info.get("thumbnail")
     if not thumbnail and entries:
         thumbnail = entries[0].get("thumbnail")
+    choices = _build_choices(url, info)
 
     return {
         "title": info.get("title") or info.get("description") or "Media tanpa judul",
@@ -747,7 +810,8 @@ def _media_payload(url: str, info: dict) -> dict:
         "thumbnail": thumbnail,
         "platform": info.get("extractor_key") or info.get("extractor") or "Unknown",
         "item_count": len(entries),
-        "choices": _build_choices(url, info),
+        "choices": choices,
+        "subtitles": _subtitle_choices(url, info) if choices["video"] else [],
         "limits": {
             "max_file_mb": MAX_MEDIA_BYTES // (1024 * 1024),
             "token_minutes": TOKEN_MAX_AGE // 60,
@@ -756,7 +820,7 @@ def _media_payload(url: str, info: dict) -> dict:
 
 
 def _find_downloaded_file(folder: Path) -> Path:
-    ignored_suffixes = {".part", ".ytdl", ".temp"}
+    ignored_suffixes = {".part", ".ytdl", ".temp", *SUBTITLE_SUFFIXES}
     candidates = [path for path in folder.iterdir() if path.is_file() and path.suffix.lower() not in ignored_suffixes]
     if not candidates:
         raise UserFacingError("File hasil unduhan tidak ditemukan.")
@@ -780,15 +844,46 @@ def _mp4_streams_are_compatible(streams: list[dict]) -> bool:
     return video_compatible and audio_compatible
 
 
-def _run_media_command(command: list[str], cancelled: threading.Event | None = None) -> None:
-    """Run FFmpeg so that cancellation and FFMPEG_TIMEOUT stop it early."""
+def _read_ffmpeg_progress(stream, on_progress) -> None:
+    for raw_line in stream:
+        key, _, value = raw_line.decode("utf-8", "ignore").strip().partition("=")
+        if key == "out_time_us" and value.isdigit():
+            try:
+                on_progress(int(value) / 1_000_000)
+            except Exception:
+                # Cancellation is enforced by the waiting loop, not this reader.
+                pass
 
-    process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+
+def _run_media_command(
+    command: list[str],
+    cancelled: threading.Event | None = None,
+    cwd: Path | None = None,
+    on_progress=None,
+) -> None:
+    """Run FFmpeg so that cancellation and FFMPEG_TIMEOUT stop it early.
+
+    With ``on_progress``, the command must include ``-progress pipe:1``; the
+    callback receives the number of output seconds written so far.
+    """
+
+    process = subprocess.Popen(
+        command,
+        cwd=cwd,
+        stdout=subprocess.PIPE if on_progress else subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+    stderr_chunks = []
+    readers = [threading.Thread(target=lambda: stderr_chunks.append(process.stderr.read()), daemon=True)]
+    if on_progress:
+        readers.append(threading.Thread(target=_read_ffmpeg_progress, args=(process.stdout, on_progress), daemon=True))
+    for reader in readers:
+        reader.start()
     deadline = time.monotonic() + FFMPEG_TIMEOUT
     try:
         while True:
             try:
-                _, stderr = process.communicate(timeout=0.5)
+                process.wait(timeout=0.5)
                 break
             except subprocess.TimeoutExpired:
                 if cancelled and cancelled.is_set():
@@ -797,16 +892,101 @@ def _run_media_command(command: list[str], cancelled: threading.Event | None = N
                     raise UserFacingError("Konversi video melebihi batas waktu server.")
     except BaseException:
         process.kill()
-        process.communicate()
+        process.wait()
         raise
+    finally:
+        for reader in readers:
+            reader.join(timeout=5)
+        for stream in (process.stdout, process.stderr):
+            if stream:
+                stream.close()
     if process.returncode:
-        raise subprocess.CalledProcessError(process.returncode, command, stderr=stderr)
+        raise subprocess.CalledProcessError(process.returncode, command, stderr=b"".join(stderr_chunks))
 
 
-def _ensure_compatible_mp4(path: Path, progress=None, cancelled: threading.Event | None = None) -> Path:
-    """Transcode incompatible MP4 codecs while retaining the selected resolution."""
+def _json3_cues(data: dict, automatic: bool) -> list[tuple[int, int, str]]:
+    """Read YouTube's json3 caption events as (start ms, end ms, text) cues."""
 
-    if path.suffix.lower() != ".mp4":
+    cues = []
+    for event in data.get("events") or []:
+        segments = event.get("segs") if isinstance(event, dict) else None
+        if not segments or "tStartMs" not in event:
+            continue
+        text = "".join(str(segment.get("utf8") or "") for segment in segments if isinstance(segment, dict))
+        text = "\n".join(line.strip() for line in text.splitlines() if line.strip())
+        if not text:
+            continue
+        start = int(event["tStartMs"])
+        cues.append([start, start + int(event.get("dDurationMs") or 0), text])
+    cues.sort(key=lambda cue: cue[0])
+    if automatic:
+        # Automatic captions roll: each line stays until well after the next
+        # one appears. Ending each line when the next starts shows one clean
+        # line at a time instead of stacked duplicates.
+        for current, following in zip(cues, cues[1:]):
+            current[1] = min(current[1], following[0])
+    return [(start, end, text) for start, end, text in cues if end > start]
+
+
+def _srt_timestamp(milliseconds: int) -> str:
+    hours, remainder = divmod(milliseconds, 3_600_000)
+    minutes, remainder = divmod(remainder, 60_000)
+    seconds, millis = divmod(remainder, 1000)
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d},{millis:03d}"
+
+
+def _srt_from_cues(cues: list[tuple[int, int, str]]) -> str:
+    blocks = [
+        f"{index}\n{_srt_timestamp(start)} --> {_srt_timestamp(end)}\n{text}\n"
+        for index, (start, end, text) in enumerate(cues, start=1)
+    ]
+    return "\n".join(blocks)
+
+
+def _prepare_subtitle(folder: Path, subtitle: dict) -> Path:
+    """Turn the downloaded subtitle into a file FFmpeg can burn into video."""
+
+    candidates = sorted(
+        path for path in folder.iterdir()
+        if path.is_file() and path.suffix.lower() in SUBTITLE_SUFFIXES
+    )
+    if not candidates:
+        raise UserFacingError("Subtitle yang dipilih tidak tersedia untuk video ini.")
+    source = candidates[0]
+    suffix = source.suffix.lower()
+
+    if suffix == ".json3":
+        try:
+            data = json.loads(source.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise UserFacingError("File subtitle dari platform tidak dapat dibaca.") from exc
+        cues = _json3_cues(data, subtitle.get("automatic", False))
+        if not cues:
+            raise UserFacingError("Subtitle yang dipilih kosong.")
+        target = folder / "linkdrop-subtitle.srt"
+        target.write_text(_srt_from_cues(cues), encoding="utf-8")
+        source.unlink()
+        return target
+    if suffix in BURNABLE_SUBTITLE_SUFFIXES:
+        target = folder / f"linkdrop-subtitle{suffix}"
+        source.replace(target)
+        return target
+    raise UserFacingError("Format subtitle dari platform ini belum didukung.")
+
+
+def _ensure_compatible_mp4(
+    path: Path,
+    progress=None,
+    cancelled: threading.Event | None = None,
+    subtitle: Path | None = None,
+) -> Path:
+    """Transcode incompatible MP4 codecs while retaining the selected resolution.
+
+    With ``subtitle``, the captions are always burned into the picture, so the
+    video is re-encoded even when its codecs are already compatible.
+    """
+
+    if path.suffix.lower() != ".mp4" and not subtitle:
         return path
 
     ffprobe = shutil.which("ffprobe")
@@ -819,7 +999,7 @@ def _ensure_compatible_mp4(path: Path, progress=None, cancelled: threading.Event
             [
                 ffprobe,
                 "-v", "error",
-                "-show_entries", "stream=codec_type,codec_name,pix_fmt",
+                "-show_entries", "stream=codec_type,codec_name,pix_fmt:format=duration",
                 "-of", "json",
                 str(path),
             ],
@@ -827,50 +1007,66 @@ def _ensure_compatible_mp4(path: Path, progress=None, cancelled: threading.Event
             capture_output=True,
             text=True,
         )
-        streams = json.loads(probe.stdout).get("streams") or []
+        probe_data = json.loads(probe.stdout)
+        streams = probe_data.get("streams") or []
     except (subprocess.CalledProcessError, json.JSONDecodeError) as exc:
         raise UserFacingError("File video hasil unduhan tidak dapat divalidasi.") from exc
 
-    if _mp4_streams_are_compatible(streams):
+    if not subtitle and _mp4_streams_are_compatible(streams):
         return path
 
+    if subtitle:
+        phase = "Menempelkan subtitle ke video"
+        detail = "Menggabungkan teks subtitle ke gambar video…"
+    else:
+        phase = "Menyesuaikan kompatibilitas video"
+        detail = "Mengonversi video ke H.264 dan audio ke AAC…"
     if progress:
-        progress({
-            "percent": 92,
-            "phase": "Menyesuaikan kompatibilitas video",
-            "detail": "Mengonversi video ke H.264 dan audio ke AAC…",
-        })
+        progress({"percent": 92, "phase": phase, "detail": detail})
 
-    converted = path.with_name(f"{path.stem}.compatible.mp4")
     try:
-        _run_media_command(
-            [
-                ffmpeg,
-                "-y",
-                "-i", str(path),
-                "-map", "0:v:0",
-                "-map", "0:a?",
-                "-c:v", "libx264",
-                "-preset", "fast",
-                "-crf", "18",
-                "-pix_fmt", "yuv420p",
-                "-c:a", "aac",
-                "-b:a", "192k",
-                "-movflags", "+faststart",
-                str(converted),
-            ],
-            cancelled,
-        )
+        duration = float((probe_data.get("format") or {}).get("duration") or 0)
+    except (TypeError, ValueError):
+        duration = 0
+    last_reported = {"percent": -1}
+
+    def report_conversion(seconds: float) -> None:
+        if not progress or duration <= 0:
+            return
+        percent = min(int(seconds / duration * 100), 99)
+        if percent > last_reported["percent"]:
+            last_reported["percent"] = percent
+            progress({"percent": 92, "phase": phase, "detail": f"{detail} {percent}%"})
+
+    converted = path.with_name(f"{path.stem}.linkdrop.mp4")
+    command = [ffmpeg, "-y", "-nostats", "-progress", "pipe:1", "-i", f"./{path.name}", "-map", "0:v:0", "-map", "0:a?"]
+    if subtitle:
+        command += ["-vf", f"subtitles={subtitle.name}:force_style='{SUBTITLE_STYLE}'"]
+    command += [
+        "-c:v", "libx264",
+        "-preset", "fast",
+        "-crf", "18",
+        "-pix_fmt", "yuv420p",
+        "-c:a", "aac",
+        "-b:a", "192k",
+        "-movflags", "+faststart",
+        f"./{converted.name}",
+    ]
+    try:
+        _run_media_command(command, cancelled, cwd=path.parent, on_progress=report_conversion)
     except subprocess.CalledProcessError as exc:
         converted.unlink(missing_ok=True)
+        if subtitle:
+            raise UserFacingError("Subtitle gagal ditempelkan ke video.") from exc
         raise UserFacingError("Video gagal dikonversi ke format MP4 yang kompatibel.") from exc
     except BaseException:
         converted.unlink(missing_ok=True)
         raise
 
     path.unlink()
-    converted.replace(path)
-    return path
+    final = path.with_suffix(".mp4")
+    converted.replace(final)
+    return final
 
 
 def _download_video_or_audio(
@@ -913,6 +1109,8 @@ def _download_video_or_audio(
 
         def download_hook(status):
             state = status.get("status")
+            if Path(str(status.get("filename") or "")).suffix.lower() in SUBTITLE_SUFFIXES:
+                return
             if state == "downloading":
                 stream_key = status.get("filename") or str(
                     (status.get("info_dict") or {}).get("format_id") or "media"
@@ -959,6 +1157,13 @@ def _download_video_or_audio(
             "merge_output_format": "mp4",
             "postprocessor_args": {"Merger": ["-movflags", "+faststart"]},
         })
+        if subtitle := payload.get("subtitle"):
+            options.update({
+                "writesubtitles": not subtitle["automatic"],
+                "writeautomaticsub": subtitle["automatic"],
+                "subtitleslangs": [re.escape(subtitle["lang"])],
+                "subtitlesformat": "json3/srt/vtt/best",
+            })
     elif kind == "audio":
         codec = payload.get("codec")
         options["format"] = "bestaudio/best"
@@ -982,7 +1187,8 @@ def _download_video_or_audio(
 
     result = _find_downloaded_file(folder)
     if kind == "video":
-        result = _ensure_compatible_mp4(result, progress, cancelled)
+        subtitle_file = _prepare_subtitle(folder, payload["subtitle"]) if payload.get("subtitle") else None
+        result = _ensure_compatible_mp4(result, progress, cancelled, subtitle_file)
     if result.stat().st_size > MAX_MEDIA_BYTES:
         raise UserFacingError(f"Ukuran hasil melebihi batas {MAX_MEDIA_BYTES // (1024 * 1024)} MB.")
     if progress:
@@ -1645,6 +1851,8 @@ def media_info():
 def download(token: str):
     try:
         payload = _decode_download_token(token)
+        if subtitle_token := request.args.get("subtitle"):
+            payload["subtitle"] = _decode_subtitle_token(subtitle_token, payload)
     except SignatureExpired:
         return jsonify({"error": "Link unduhan kedaluwarsa. Analisis link kembali."}), 410
     except BadSignature:

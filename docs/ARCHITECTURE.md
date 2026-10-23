@@ -70,6 +70,12 @@ The default container uses one Gunicorn worker with four threads. Multiple worke
 
 Resolution options come from extractor metadata. Linkdrop does not upscale video or reconstruct detail lost by the source. Photo files are copied without recompression whenever the extractor exposes the original asset.
 
+### Burned-in subtitles
+
+When the source offers Indonesian or English subtitles, `/api/info` returns a signed subtitle choice for each language. Creator-provided tracks are preferred; automatic captions are offered only in the video's original spoken language, never YouTube's machine translations. The browser appends the selected subtitle token to the video download URL, and the server rejects it unless it was issued for the same video.
+
+During the download, yt-dlp fetches the track (json3 on YouTube). Linkdrop converts json3 to SRT, ending each automatic-caption line when the next begins so rolling captions show one clean line instead of stacked duplicates. FFmpeg then renders the text into the picture with libass in a white-on-translucent-black style similar to YouTube's captions. Burning always re-encodes the video, so it takes longer than a plain download and reports its progress as a percentage. Container images install `fonts-dejavu-core` because libass cannot draw text without a font. Multi-link packages do not offer subtitles.
+
 ### Playback compatibility
 
 An `.mp4` extension does not guarantee that a device can decode the streams inside it. Linkdrop inspects completed MP4 files with ffprobe. Compatible H.264/AAC output is passed through; incompatible video is transcoded to H.264 with `yuv420p`, AAC audio, and fast-start metadata while retaining the selected resolution.
