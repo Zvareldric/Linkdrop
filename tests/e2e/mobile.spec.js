@@ -374,3 +374,72 @@ test("antrean panjang menampilkan peringatan dan tombol antrean berikutnya berfu
   await page.getByRole("button", { name: "Analisis 1 link berikutnya" }).click();
   await expect(page.locator(".batch-item")).toHaveCount(31);
 });
+
+
+test("subtitle hanya bisa dipilih jika video memilikinya dan ikut dikirim ke unduhan", async ({ page }) => {
+  const subtitlePayload = {
+    ...richMediaPayload,
+    subtitles: [
+      { id: "subtitle:id", language: "id", automatic: true, token: "sub-id" },
+      { id: "subtitle:en", language: "en", automatic: false, token: "sub-en" }
+    ]
+  };
+  await page.route("**/api/info", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(subtitlePayload)
+  }));
+  let requestedUrl = null;
+  await page.route("**/api/download/mock?**", route => {
+    requestedUrl = route.request().url();
+    const fileBytes = Buffer.from("video-with-subtitle", "utf8");
+    return route.fulfill({
+      status: 200,
+      contentType: "application/vnd.linkdrop.progress",
+      body: Buffer.concat([
+        frame("P", { percent: 92, phase: "Menempelkan subtitle ke video", detail: "50%" }),
+        frame("M", { filename: "contoh.mp4", content_type: "video/mp4", size: fileBytes.length }),
+        frame("D", fileBytes),
+        frame("C", { ok: true })
+      ])
+    });
+  });
+
+  await page.getByLabel("Tempel link media").fill("https://www.youtube.com/watch?v=abc123");
+  await page.getByRole("button", { name: "Lihat pilihan" }).click();
+
+  const picker = page.getByRole("group", { name: "Subtitle" });
+  await expect(picker).toBeVisible();
+  await expect(picker.getByRole("button")).toHaveText(["Tanpa subtitle", "Indonesia (otomatis)", "Inggris"]);
+  await expect(picker.getByRole("button", { name: "Tanpa subtitle" })).toHaveAttribute("aria-pressed", "true");
+
+  await page.getByRole("button", { name: "Audio", exact: true }).click();
+  await expect(picker).toBeHidden();
+  await page.getByRole("button", { name: "Video", exact: true }).click();
+
+  await picker.getByRole("button", { name: "Inggris" }).click();
+  await expect(picker.getByRole("button", { name: "Inggris" })).toHaveAttribute("aria-pressed", "true");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+  await page.getByRole("button", { name: "EN", exact: true }).click();
+  await expect(picker.getByRole("button", { name: "English" })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("link", { name: /720p \+ English subtitles/ }).click();
+
+  await expect(page.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "100");
+  const params = new URL(requestedUrl).searchParams;
+  expect(params.get("subtitle")).toBe("sub-en");
+  expect(params.get("progress")).toBe("1");
+});
+
+test("pemilih subtitle tersembunyi jika video tidak memiliki subtitle", async ({ page }) => {
+  await page.route("**/api/info", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(mediaPayload)
+  }));
+  await page.getByLabel("Tempel link media").fill("https://example.com/video");
+  await page.getByRole("button", { name: "Lihat pilihan" }).click();
+  await expect(page.getByText("Contoh media untuk pengujian")).toBeVisible();
+  await expect(page.getByRole("group", { name: "Subtitle" })).toBeHidden();
+  await expect(page.getByRole("link", { name: /^720p/ })).toHaveAttribute("href", "/api/download/mock");
+});

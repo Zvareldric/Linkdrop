@@ -35,6 +35,7 @@ Linkdrop is a responsive web app for inspecting and downloading public media you
 
 - Shows the real formats and source resolutions available for a public link.
 - Downloads video, source audio or MP3, and original photos; multi-image posts become ZIP files.
+- Burns Indonesian or English subtitles into the video when the source provides them.
 - Streams download progress and lets users choose where to save the completed file.
 - Supports an optional multi-link mode that creates one ZIP package.
 - Works on desktop and mobile, with Indonesian and English interfaces.
