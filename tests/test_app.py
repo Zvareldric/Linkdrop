@@ -1,7 +1,14 @@
+import base64
+import http.server
 import io
 import json
+import os
+import socket
 import struct
+import sys
 import tempfile
+import threading
+import time
 import unittest
 import zipfile
 from pathlib import Path
@@ -61,6 +68,7 @@ def parse_progress_frames(body):
 class AppTests(unittest.TestCase):
     def setUp(self):
         media_app.app.config.update(TESTING=True)
+        media_app._rate_limiter.reset()
         self.client = media_app.app.test_client()
 
     def test_health_endpoint(self):
@@ -522,6 +530,233 @@ class AppTests(unittest.TestCase):
                 response = media_app._stream_file(result, folder)
                 self.assertEqual(b"".join(response.response), b"hello")
             self.assertFalse(folder.exists())
+
+
+def fake_resolver(mapping):
+    def resolve(host, *args, **kwargs):
+        address = mapping[host]
+        family = socket.AF_INET6 if ":" in address else socket.AF_INET
+        return [(family, socket.SOCK_STREAM, 6, "", (address, args[0] if args else 0))]
+    return resolve
+
+
+def basic_auth(username, password):
+    token = base64.b64encode(f"{username}:{password}".encode()).decode()
+    return {"Authorization": f"Basic {token}"}
+
+
+class NetworkGuardTests(unittest.TestCase):
+    def test_guard_blocks_private_answers_only_inside_media_requests(self):
+        resolver = fake_resolver({"media.example.com": "10.0.0.5"})
+        with patch.object(media_app, "_system_getaddrinfo", resolver):
+            self.assertEqual(socket.getaddrinfo("media.example.com", 443)[0][4][0], "10.0.0.5")
+            with media_app._public_network_only():
+                with self.assertRaises(media_app.BlockedAddressError):
+                    socket.getaddrinfo("media.example.com", 443)
+
+    def test_guard_keeps_public_answers_and_drops_private_ones(self):
+        def resolver(host, *args, **kwargs):
+            return [
+                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("192.168.1.10", 443)),
+                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443)),
+            ]
+
+        with patch.object(media_app, "_system_getaddrinfo", resolver), media_app._public_network_only():
+            answers = socket.getaddrinfo("cdn.example.com", 443)
+        self.assertEqual([item[4][0] for item in answers], ["93.184.216.34"])
+
+    def test_guard_allows_the_configured_outbound_proxy(self):
+        resolver = fake_resolver({"proxy.internal": "10.0.0.2"})
+        with patch.object(media_app, "_system_getaddrinfo", resolver), \
+                patch.dict(os.environ, {"HTTPS_PROXY": "http://proxy.internal:3128"}), \
+                media_app._public_network_only():
+            self.assertEqual(socket.getaddrinfo("proxy.internal", 3128)[0][4][0], "10.0.0.2")
+
+    def test_validation_reports_blocked_host_as_private(self):
+        resolver = fake_resolver({"internal.example.com": "127.0.0.1"})
+        with patch.object(media_app, "_system_getaddrinfo", resolver):
+            with self.assertRaisesRegex(media_app.PrivateNetworkError, "privat"):
+                media_app._validate_public_url("https://internal.example.com/video")
+
+    def test_remote_download_does_not_follow_redirect_into_private_network(self):
+        requested_paths = []
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                requested_paths.append(self.path)
+                if self.path == "/start":
+                    self.send_response(302)
+                    self.send_header("Location", f"http://internal.test:{self.server.server_port}/secret")
+                    self.end_headers()
+                else:
+                    self.send_response(200)
+                    self.end_headers()
+                    self.wfile.write(b"secret")
+
+            def log_message(self, *args):
+                pass
+
+        server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        environment = {key: value for key, value in os.environ.items() if not key.lower().endswith("_proxy")}
+        resolver = fake_resolver({"public.test": "127.0.0.1", "internal.test": "127.0.0.2"})
+
+        with tempfile.TemporaryDirectory() as folder, \
+                patch.dict(os.environ, environment, clear=True), \
+                patch.object(media_app, "_system_getaddrinfo", resolver), \
+                patch.object(media_app, "_is_public_address", lambda address: address == "127.0.0.1"), \
+                patch.object(media_app, "_validate_public_url", lambda url: url):
+            with self.assertRaises(media_app.PrivateNetworkError):
+                media_app._download_remote(
+                    (f"http://public.test:{server.server_port}/start", {}, "jpg"),
+                    Path(folder) / "photo.jpg",
+                    1024,
+                )
+
+        self.assertEqual(requested_paths, ["/start"])
+
+    def test_wrapped_private_network_error_keeps_clear_message(self):
+        message = media_app._friendly_error(Exception(
+            "ERROR: [generic] Unable to download webpage: Failed to resolve "
+            "([Errno -2] Alamat jaringan privat atau lokal tidak diizinkan.)"
+        ))
+        self.assertEqual(message, media_app.PRIVATE_NETWORK_MESSAGE)
+
+
+class CleanupTests(unittest.TestCase):
+    def test_progress_download_removes_files_when_client_leaves_early(self):
+        created = {}
+
+        def slow_download(payload, folder, report=None, cancelled=None):
+            report({"percent": 92, "phase": "File siap"})
+            time.sleep(0.3)
+            result = folder / "video.mp4"
+            result.write_bytes(b"0" * 1000)
+            created["folder"] = folder
+            return result
+
+        with tempfile.TemporaryDirectory() as work_dir, \
+                patch.object(media_app, "WORK_DIR", Path(work_dir)), \
+                patch.object(media_app, "_download_with_retry", slow_download):
+            with media_app.app.test_request_context("/"):
+                response = media_app._stream_progress_download({"url": "https://example.com", "kind": "video"})
+                frames = iter(response.response)
+                next(frames)
+                next(frames)
+                response.response.close()
+
+            deadline = time.monotonic() + 5
+            while any(Path(work_dir).iterdir()) and time.monotonic() < deadline:
+                time.sleep(0.05)
+            self.assertIn("folder", created)
+            self.assertEqual(list(Path(work_dir).iterdir()), [])
+
+    def test_quiet_progress_stream_repeats_last_status(self):
+        def slow_download(payload, folder, report=None, cancelled=None):
+            report({"percent": 92, "phase": "Menyesuaikan kompatibilitas video"})
+            time.sleep(0.25)
+            result = folder / "video.mp4"
+            result.write_bytes(b"data")
+            return result
+
+        with tempfile.TemporaryDirectory() as work_dir, \
+                patch.object(media_app, "WORK_DIR", Path(work_dir)), \
+                patch.object(media_app, "PROGRESS_HEARTBEAT_SECONDS", 0.05), \
+                patch.object(media_app, "_download_with_retry", slow_download):
+            with media_app.app.test_request_context("/"):
+                response = media_app._stream_progress_download({"url": "https://example.com", "kind": "video"})
+                frames = parse_progress_frames(b"".join(response.response))
+
+        repeated = [json.loads(payload) for kind, payload in frames if kind == b"P"]
+        self.assertGreater(sum(1 for event in repeated if event["percent"] == 92), 1)
+        self.assertEqual(frames[-1][0], b"C")
+
+    def test_ffmpeg_command_stops_when_download_is_cancelled(self):
+        cancelled = threading.Event()
+        threading.Timer(0.2, cancelled.set).start()
+        started = time.monotonic()
+        with self.assertRaisesRegex(media_app.UserFacingError, "dibatalkan"):
+            media_app._run_media_command([sys.executable, "-c", "import time; time.sleep(30)"], cancelled)
+        self.assertLess(time.monotonic() - started, 5)
+
+    def test_ffmpeg_command_stops_after_timeout(self):
+        with patch.object(media_app, "FFMPEG_TIMEOUT", 0):
+            with self.assertRaisesRegex(media_app.UserFacingError, "batas waktu"):
+                media_app._run_media_command([sys.executable, "-c", "import time; time.sleep(30)"])
+
+    def test_ffmpeg_command_failure_is_reported(self):
+        with self.assertRaises(media_app.subprocess.CalledProcessError):
+            media_app._run_media_command([sys.executable, "-c", "raise SystemExit(3)"])
+
+
+class AccessControlTests(unittest.TestCase):
+    def setUp(self):
+        media_app.app.config.update(TESTING=True)
+        media_app._rate_limiter.reset()
+        self.addCleanup(media_app._rate_limiter.reset)
+        self.client = media_app.app.test_client()
+
+    def test_batch_rejects_non_numeric_package_number(self):
+        with patch.object(media_app, "_decode_download_token", return_value={"url": "https://example.com", "kind": "video"}):
+            response = self.client.post("/api/batch/download", json={"tokens": ["token"], "package": "abc"})
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.get_json()["error"], "Nomor paket tidak valid.")
+
+    def test_rate_limit_parser(self):
+        self.assertEqual(media_app._parse_rate_limit("30/60"), (30, 60))
+        self.assertEqual(media_app._parse_rate_limit("5"), (5, 60))
+        self.assertIsNone(media_app._parse_rate_limit("off"))
+        self.assertIsNone(media_app._parse_rate_limit("0"))
+        with self.assertRaises(RuntimeError):
+            media_app._parse_rate_limit("banyak")
+
+    @patch("app._validate_public_url", side_effect=media_app.UserFacingError("Link tidak valid."))
+    def test_info_requests_are_rate_limited_per_client(self, _validate):
+        with patch.dict(media_app.RATE_LIMITS, {"info": (2, 60)}):
+            statuses = [self.client.post("/api/info", json={"url": "x"}).status_code for _ in range(3)]
+            limited = self.client.post("/api/info", json={"url": "x"})
+        self.assertEqual(statuses, [422, 422, 429])
+        self.assertIn("Retry-After", limited.headers)
+        self.assertIn("Terlalu banyak permintaan", limited.get_json()["error"])
+
+    @patch("app._validate_public_url", side_effect=media_app.UserFacingError("Link tidak valid."))
+    def test_trusted_proxy_header_separates_clients(self, _validate):
+        with patch.dict(media_app.RATE_LIMITS, {"info": (1, 60)}), \
+                patch.object(media_app, "TRUSTED_PROXY_HEADER", "CF-Connecting-IP"):
+            first = self.client.post("/api/info", json={"url": "x"}, headers={"CF-Connecting-IP": "203.0.113.1"})
+            second = self.client.post("/api/info", json={"url": "x"}, headers={"CF-Connecting-IP": "203.0.113.2"})
+            repeated = self.client.post("/api/info", json={"url": "x"}, headers={"CF-Connecting-IP": "203.0.113.1"})
+        self.assertEqual([first.status_code, second.status_code, repeated.status_code], [422, 422, 429])
+
+    def test_forwarded_header_uses_entry_added_by_trusted_proxy(self):
+        with patch.object(media_app, "TRUSTED_PROXY_HEADER", "X-Forwarded-For"), \
+                media_app.app.test_request_context("/", headers={"X-Forwarded-For": "1.1.1.1, 203.0.113.9"}):
+            self.assertEqual(media_app._client_address(), "203.0.113.9")
+
+    def test_password_protects_pages_but_not_health_check(self):
+        with patch.object(media_app, "ACCESS_PASSWORD", "rahasia"):
+            anonymous = self.client.get("/")
+            health = self.client.get("/api/health")
+            signed_in = self.client.get("/", headers=basic_auth("linkdrop", "rahasia"))
+            wrong_user = self.client.get("/", headers=basic_auth("admin", "rahasia"))
+        self.assertEqual(anonymous.status_code, 401)
+        self.assertIn("Basic", anonymous.headers["WWW-Authenticate"])
+        self.assertEqual(health.status_code, 200)
+        self.assertEqual(signed_in.status_code, 200)
+        self.assertEqual(wrong_user.status_code, 401)
+
+    def test_repeated_wrong_passwords_lock_out_even_the_right_one(self):
+        with patch.object(media_app, "ACCESS_PASSWORD", "rahasia"):
+            for _ in range(media_app.FAILED_LOGIN_LIMIT[0]):
+                self.assertEqual(self.client.get("/", headers=basic_auth("linkdrop", "salah")).status_code, 401)
+            locked = self.client.get("/", headers=basic_auth("linkdrop", "rahasia"))
+        self.assertEqual(locked.status_code, 429)
+        self.assertIn("Retry-After", locked.headers)
+
+    def test_no_password_keeps_app_open(self):
+        self.assertEqual(self.client.get("/").status_code, 200)
 
 
 if __name__ == "__main__":

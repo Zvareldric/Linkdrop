@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hmac
 import ipaddress
 import json
 import mimetypes
@@ -39,10 +40,16 @@ TOKEN_MAX_AGE = int(os.environ.get("DOWNLOAD_TOKEN_MAX_AGE", 15 * 60))
 HTTP_TIMEOUT = int(os.environ.get("HTTP_TIMEOUT", 30))
 CHUNK_SIZE = 1024 * 1024
 PROGRESS_MIME = "application/vnd.linkdrop.progress"
+PROGRESS_HEARTBEAT_SECONDS = 15
 MAX_BATCH_ITEMS = 30
 BATCH_WARNING_ITEMS = 10
 BATCH_DISK_FACTOR = 2.5
 MAX_GALLERY_ITEMS = 20
+FFMPEG_TIMEOUT = int(os.environ.get("FFMPEG_TIMEOUT", 60 * 60))
+ACCESS_USERNAME = os.environ.get("ACCESS_USERNAME", "linkdrop").strip() or "linkdrop"
+ACCESS_PASSWORD = os.environ.get("ACCESS_PASSWORD", "").strip()
+TRUSTED_PROXY_HEADER = os.environ.get("TRUSTED_PROXY_HEADER", "").strip()
+FAILED_LOGIN_LIMIT = (10, 10 * 60)
 
 WORK_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -58,6 +65,29 @@ def _token_secret_for_runtime(configured_secret: str, is_vercel: bool) -> str:
 _configured_token_secret = os.environ.get("DOWNLOAD_TOKEN_SECRET", "").strip()
 _token_secret = _token_secret_for_runtime(_configured_token_secret, IS_VERCEL)
 _signer = URLSafeTimedSerializer(_token_secret, salt="linkdrop-download-v1")
+
+
+def _parse_rate_limit(value: str) -> tuple[int, int] | None:
+    """Parse ``requests/seconds``; ``0`` or ``off`` disables the limit."""
+
+    raw = value.strip().lower()
+    if raw in {"", "0", "off"}:
+        return None
+    count, _, window = raw.partition("/")
+    try:
+        limit = (int(count), int(window or 60))
+    except ValueError as exc:
+        raise RuntimeError(f"Format rate limit tidak valid: {value!r}. Gunakan jumlah/detik, misalnya 30/60.") from exc
+    if limit[0] < 1 or limit[1] < 1:
+        raise RuntimeError(f"Format rate limit tidak valid: {value!r}. Gunakan jumlah/detik, misalnya 30/60.")
+    return limit
+
+
+RATE_LIMITS = {
+    "info": _parse_rate_limit(os.environ.get("RATE_LIMIT_INFO", "30/60")),
+    "download": _parse_rate_limit(os.environ.get("RATE_LIMIT_DOWNLOAD", "20/600")),
+}
+RATE_LIMITED_ENDPOINTS = {"media_info": "info", "download": "download", "batch_download": "download"}
 
 
 def _register_arc_cookie_support() -> None:
@@ -293,6 +323,71 @@ class UserFacingError(Exception):
     """An expected error that is safe to show to the user."""
 
 
+class PrivateNetworkError(UserFacingError):
+    """A media request tried to reach a private or local network address."""
+
+
+class BlockedAddressError(socket.gaierror):
+    """Resolver error used so HTTP clients treat a blocked host as unreachable."""
+
+
+PRIVATE_NETWORK_MESSAGE = "Alamat jaringan privat atau lokal tidak diizinkan."
+_egress_state = threading.local()
+_system_getaddrinfo = socket.getaddrinfo
+
+
+def _is_public_address(address: str) -> bool:
+    try:
+        return ipaddress.ip_address(address).is_global
+    except ValueError:
+        return False
+
+
+def _proxy_hosts() -> set[str]:
+    hosts = set()
+    for name in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"):
+        value = os.environ.get(name, "").strip()
+        if value:
+            host = urlparse(value if "://" in value else f"http://{value}").hostname
+            if host:
+                hosts.add(host.lower())
+    return hosts
+
+
+def _public_only_getaddrinfo(host, *args, **kwargs):
+    """Resolve hosts, dropping private addresses while a media request runs.
+
+    yt-dlp follows redirects and fetches manifests and fragments on its own,
+    so validating only the submitted URL is not enough. Checking every lookup
+    made by the request thread also covers DNS answers that change between
+    validation and connection. A configured outbound proxy stays reachable.
+    """
+
+    results = _system_getaddrinfo(host, *args, **kwargs)
+    if not getattr(_egress_state, "public_only", False):
+        return results
+    name = host.decode("ascii", "ignore") if isinstance(host, bytes) else str(host or "")
+    if name.lower().rstrip(".") in _proxy_hosts():
+        return results
+    public = [item for item in results if _is_public_address(item[4][0])]
+    if not public:
+        raise BlockedAddressError(socket.EAI_NONAME, PRIVATE_NETWORK_MESSAGE)
+    return public
+
+
+socket.getaddrinfo = _public_only_getaddrinfo
+
+
+@contextmanager
+def _public_network_only():
+    previous = getattr(_egress_state, "public_only", False)
+    _egress_state.public_only = True
+    try:
+        yield
+    finally:
+        _egress_state.public_only = previous
+
+
 def _json_body():
     return request.get_json(silent=True) or {}
 
@@ -303,6 +398,8 @@ def _friendly_error(exc: Exception) -> str:
 
     if isinstance(exc, UserFacingError):
         return message
+    if PRIVATE_NETWORK_MESSAGE.lower() in lowered:
+        return PRIVATE_NETWORK_MESSAGE
     if "unsupported url" in lowered and "tiktok.com" in lowered and "/photo/" in lowered:
         return "Postingan foto TikTok belum didukung oleh extractor saat ini. Coba link TikTok video."
     if "unsupported url" in lowered:
@@ -357,13 +454,15 @@ def _validate_public_url(raw_url: str) -> str:
 
     try:
         addresses = {item[4][0] for item in socket.getaddrinfo(hostname, None)}
+    except BlockedAddressError as exc:
+        raise PrivateNetworkError(PRIVATE_NETWORK_MESSAGE) from exc
     except socket.gaierror as exc:
         raise UserFacingError("Domain pada link tidak dapat ditemukan.") from exc
 
     for address in addresses:
         ip = ipaddress.ip_address(address)
         if not ip.is_global:
-            raise UserFacingError("Alamat jaringan privat atau lokal tidak diizinkan.")
+            raise PrivateNetworkError(PRIVATE_NETWORK_MESSAGE)
 
     return url
 
@@ -436,7 +535,7 @@ def _base_ydl_options() -> dict:
 def _extract_info(url: str) -> dict:
     with _authentication_options() as auth:
         options = {**_base_ydl_options(), **auth, "skip_download": True}
-        with yt_dlp.YoutubeDL(options) as ydl:
+        with _public_network_only(), yt_dlp.YoutubeDL(options) as ydl:
             info = ydl.extract_info(url, download=False)
     if not isinstance(info, dict):
         raise UserFacingError("Media publik pada link ini tidak dapat dibaca oleh platform sumber.")
@@ -681,7 +780,30 @@ def _mp4_streams_are_compatible(streams: list[dict]) -> bool:
     return video_compatible and audio_compatible
 
 
-def _ensure_compatible_mp4(path: Path, progress=None) -> Path:
+def _run_media_command(command: list[str], cancelled: threading.Event | None = None) -> None:
+    """Run FFmpeg so that cancellation and FFMPEG_TIMEOUT stop it early."""
+
+    process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    deadline = time.monotonic() + FFMPEG_TIMEOUT
+    try:
+        while True:
+            try:
+                _, stderr = process.communicate(timeout=0.5)
+                break
+            except subprocess.TimeoutExpired:
+                if cancelled and cancelled.is_set():
+                    raise UserFacingError("Unduhan dibatalkan.")
+                if time.monotonic() > deadline:
+                    raise UserFacingError("Konversi video melebihi batas waktu server.")
+    except BaseException:
+        process.kill()
+        process.communicate()
+        raise
+    if process.returncode:
+        raise subprocess.CalledProcessError(process.returncode, command, stderr=stderr)
+
+
+def _ensure_compatible_mp4(path: Path, progress=None, cancelled: threading.Event | None = None) -> Path:
     """Transcode incompatible MP4 codecs while retaining the selected resolution."""
 
     if path.suffix.lower() != ".mp4":
@@ -721,7 +843,7 @@ def _ensure_compatible_mp4(path: Path, progress=None) -> Path:
 
     converted = path.with_name(f"{path.stem}.compatible.mp4")
     try:
-        subprocess.run(
+        _run_media_command(
             [
                 ffmpeg,
                 "-y",
@@ -737,12 +859,14 @@ def _ensure_compatible_mp4(path: Path, progress=None) -> Path:
                 "-movflags", "+faststart",
                 str(converted),
             ],
-            check=True,
-            capture_output=True,
+            cancelled,
         )
     except subprocess.CalledProcessError as exc:
         converted.unlink(missing_ok=True)
         raise UserFacingError("Video gagal dikonversi ke format MP4 yang kompatibel.") from exc
+    except BaseException:
+        converted.unlink(missing_ok=True)
+        raise
 
     path.unlink()
     converted.replace(path)
@@ -853,12 +977,12 @@ def _download_video_or_audio(
         raise UserFacingError("Jenis unduhan tidak valid.")
 
     with _authentication_options() as auth:
-        with yt_dlp.YoutubeDL({**options, **auth}) as ydl:
+        with _public_network_only(), yt_dlp.YoutubeDL({**options, **auth}) as ydl:
             ydl.download([url])
 
     result = _find_downloaded_file(folder)
     if kind == "video":
-        result = _ensure_compatible_mp4(result, progress)
+        result = _ensure_compatible_mp4(result, progress, cancelled)
     if result.stat().st_size > MAX_MEDIA_BYTES:
         raise UserFacingError(f"Ukuran hasil melebihi batas {MAX_MEDIA_BYTES // (1024 * 1024)} MB.")
     if progress:
@@ -915,6 +1039,22 @@ def _best_progressive_video_source(entry: dict) -> tuple[str, dict, str] | None:
 
 
 def _download_remote(
+    source: tuple[str, dict, str],
+    destination: Path,
+    budget: int,
+    progress=None,
+    cancelled: threading.Event | None = None,
+) -> int:
+    with _public_network_only():
+        try:
+            return _fetch_remote(source, destination, budget, progress, cancelled)
+        except requests.RequestException as exc:
+            if PRIVATE_NETWORK_MESSAGE in str(exc):
+                raise PrivateNetworkError(PRIVATE_NETWORK_MESSAGE) from exc
+            raise
+
+
+def _fetch_remote(
     source: tuple[str, dict, str],
     destination: Path,
     budget: int,
@@ -1213,6 +1353,11 @@ def _download_batch(
     return archive
 
 
+def _remove_after_thread(thread: threading.Thread, folder: Path) -> None:
+    thread.join()
+    shutil.rmtree(folder, ignore_errors=True)
+
+
 def _progress_frame(kind: bytes, payload=b"") -> bytes:
     if isinstance(payload, dict):
         payload = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -1256,10 +1401,18 @@ def _stream_progress_download(
     @stream_with_context
     def generate():
         completed = False
+        last_progress = {"percent": 0, "phase": "Memulai unduhan", "detail": ""}
         try:
             while True:
-                event_type, value = events.get()
+                try:
+                    event_type, value = events.get(timeout=PROGRESS_HEARTBEAT_SECONDS)
+                except queue.Empty:
+                    # Repeat the last status so proxies such as Cloudflare do not
+                    # close a stream that is quiet during a long conversion.
+                    yield _progress_frame(b"P", last_progress)
+                    continue
                 if event_type == "progress":
+                    last_progress = value
                     yield _progress_frame(b"P", value)
                     continue
                 if event_type == "error":
@@ -1287,6 +1440,16 @@ def _stream_progress_download(
             cancelled.set()
             if completed or not download_thread.is_alive():
                 shutil.rmtree(cleanup_folder, ignore_errors=True)
+            else:
+                # The client left while the worker was still running. The worker
+                # may still finish and hand over a file nobody will read, so
+                # remove the folder once it stops instead of leaking it.
+                threading.Thread(
+                    target=_remove_after_thread,
+                    args=(download_thread, cleanup_folder),
+                    name="linkdrop-cleanup",
+                    daemon=True,
+                ).start()
 
     response = Response(generate(), mimetype=PROGRESS_MIME)
     response.headers["Cache-Control"] = "private, no-store, max-age=0"
@@ -1323,6 +1486,109 @@ def _decode_download_token(token: str) -> dict:
     if payload.get("kind") not in {"video", "audio", "gallery"}:
         raise UserFacingError("Jenis unduhan tidak valid.")
     return payload
+
+
+class _RateLimiter:
+    """In-memory sliding window, enough for the single-worker deployment."""
+
+    def __init__(self):
+        self._hits: dict[tuple, list[float]] = {}
+        self._lock = threading.Lock()
+
+    def _recent(self, key: tuple, window: int, now: float) -> list[float]:
+        return [moment for moment in self._hits.get(key, ()) if now - moment < window]
+
+    def retry_after(self, key: tuple, limit: int, window: int, record: bool = True) -> int:
+        """Return seconds to wait when the limit is reached, otherwise 0."""
+
+        now = time.monotonic()
+        with self._lock:
+            hits = self._recent(key, window, now)
+            if len(hits) >= limit:
+                self._hits[key] = hits
+                return max(1, int(window - (now - hits[0])) + 1)
+            if record:
+                hits.append(now)
+            self._hits[key] = hits
+            if len(self._hits) > 10_000:
+                self._hits = {
+                    item: moments for item, moments in self._hits.items()
+                    if moments and now - moments[-1] < 3600
+                }
+            return 0
+
+    def reset(self) -> None:
+        with self._lock:
+            self._hits.clear()
+
+
+_rate_limiter = _RateLimiter()
+
+
+def _client_address() -> str:
+    """Identify the client, trusting only the header named by the operator.
+
+    Behind Cloudflare Tunnel every request arrives from cloudflared on
+    localhost, so the real address comes from ``CF-Connecting-IP``. For a
+    comma-separated header such as ``X-Forwarded-For`` the last entry is the
+    one appended by the trusted proxy; earlier entries can be forged.
+    """
+
+    if TRUSTED_PROXY_HEADER:
+        value = request.headers.get(TRUSTED_PROXY_HEADER, "")
+        candidate = value.split(",")[-1].strip()
+        if candidate:
+            return candidate
+    return request.remote_addr or "unknown"
+
+
+def _error_response(message: str, status: int, retry_after: int | None = None):
+    response = jsonify({"error": message})
+    response.status_code = status
+    if retry_after:
+        response.headers["Retry-After"] = str(retry_after)
+    return response
+
+
+def _has_valid_credentials() -> bool:
+    auth = request.authorization
+    if not auth or auth.type != "basic":
+        return False
+    username_ok = hmac.compare_digest((auth.username or "").encode("utf-8"), ACCESS_USERNAME.encode("utf-8"))
+    password_ok = hmac.compare_digest((auth.password or "").encode("utf-8"), ACCESS_PASSWORD.encode("utf-8"))
+    return username_ok and password_ok
+
+
+@app.before_request
+def _access_control():
+    if request.endpoint in {"health", "static"}:
+        return None
+    client = _client_address()
+
+    if ACCESS_PASSWORD:
+        login_key = ("failed-login", client)
+        limit, window = FAILED_LOGIN_LIMIT
+        retry_after = _rate_limiter.retry_after(login_key, limit, window, record=False)
+        if retry_after:
+            return _error_response("Terlalu banyak percobaan masuk. Coba lagi nanti.", 429, retry_after)
+        if not _has_valid_credentials():
+            if request.authorization:
+                _rate_limiter.retry_after(login_key, limit, window)
+            response = _error_response("Masukkan nama pengguna dan kata sandi Linkdrop.", 401)
+            response.headers["WWW-Authenticate"] = 'Basic realm="Linkdrop", charset="UTF-8"'
+            return response
+
+    bucket = RATE_LIMITED_ENDPOINTS.get(request.endpoint)
+    rate_limit = RATE_LIMITS.get(bucket) if bucket else None
+    if rate_limit:
+        retry_after = _rate_limiter.retry_after((bucket, client), *rate_limit)
+        if retry_after:
+            return _error_response(
+                f"Terlalu banyak permintaan. Coba lagi dalam {retry_after} detik.",
+                429,
+                retry_after,
+            )
+    return None
 
 
 @app.after_request
@@ -1413,7 +1679,10 @@ def batch_download():
             raise UserFacingError(f"Satu paket maksimal berisi {MAX_BATCH_ITEMS} media.")
         if any(not isinstance(token, str) or len(token) > 8192 for token in tokens):
             raise UserFacingError("Pilihan media tidak valid.")
-        package_number = int(body.get("package") or 1)
+        try:
+            package_number = int(body.get("package") or 1)
+        except (TypeError, ValueError):
+            raise UserFacingError("Nomor paket tidak valid.") from None
         if package_number < 1 or package_number > 999:
             raise UserFacingError("Nomor paket tidak valid.")
         payloads = [_decode_download_token(token) for token in tokens]
