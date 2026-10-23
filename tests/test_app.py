@@ -3,7 +3,9 @@ import http.server
 import io
 import json
 import os
+import shutil
 import socket
+import subprocess
 import struct
 import sys
 import tempfile
@@ -757,6 +759,198 @@ class AccessControlTests(unittest.TestCase):
 
     def test_no_password_keeps_app_open(self):
         self.assertEqual(self.client.get("/").status_code, 200)
+
+
+AUTO_JSON3 = {
+    "wireMagic": "pb3",
+    "events": [
+        {"tStartMs": 0, "dDurationMs": 6000, "id": 1, "wpWinPosId": 1, "wsWinStyleId": 1},
+        {"tStartMs": 200, "dDurationMs": 3800, "wWinId": 1, "segs": [{"utf8": "halo"}, {"utf8": " semuanya", "tOffsetMs": 300}]},
+        {"tStartMs": 2000, "dDurationMs": 2000, "wWinId": 1, "aAppend": 1, "segs": [{"utf8": "\n"}]},
+        {"tStartMs": 2000, "dDurationMs": 4000, "wWinId": 1, "segs": [{"utf8": "baris kedua"}]},
+    ],
+}
+
+SUBTITLE_INFO = {
+    **SAMPLE_INFO,
+    "subtitles": {
+        "en-US": [{"ext": "json3", "url": "https://www.youtube.com/api/timedtext?lang=en"}],
+        "live_chat": [{"ext": "json", "url": "https://www.youtube.com/live_chat"}],
+    },
+    "automatic_captions": {
+        "id-orig": [{"ext": "json3", "url": "https://www.youtube.com/api/timedtext?lang=id"}],
+        "id": [{"ext": "json3", "url": "https://www.youtube.com/api/timedtext?lang=id"}],
+        "en": [{"ext": "json3", "url": "https://www.youtube.com/api/timedtext?tlang=en"}],
+        "fr": [{"ext": "json3", "url": "https://www.youtube.com/api/timedtext?tlang=fr"}],
+    },
+}
+
+
+class SubtitleTests(unittest.TestCase):
+    def setUp(self):
+        media_app.app.config.update(TESTING=True)
+        media_app._rate_limiter.reset()
+        self.client = media_app.app.test_client()
+        self.url = "https://www.youtube.com/watch?v=abc123"
+
+    def test_offers_only_indonesian_and_english_tracks_that_exist(self):
+        subtitles = media_app._subtitle_choices(self.url, SUBTITLE_INFO)
+        self.assertEqual(
+            [(item["language"], item["automatic"]) for item in subtitles],
+            [("id", True), ("en", False)],
+        )
+        english = media_app._signer.loads(subtitles[1]["token"])
+        self.assertEqual((english["kind"], english["lang"], english["automatic"]), ("subtitle", "en-US", False))
+        indonesian = media_app._signer.loads(subtitles[0]["token"])
+        self.assertEqual(indonesian["lang"], "id-orig")
+
+    def test_machine_translated_captions_are_not_offered(self):
+        info = {**SAMPLE_INFO, "automatic_captions": {"id": [{"ext": "json3"}], "en": [{"ext": "json3"}]}}
+        self.assertEqual(media_app._subtitle_choices(self.url, info), [])
+
+    def test_video_without_subtitles_has_no_subtitle_choices(self):
+        payload = media_app._media_payload(self.url, SAMPLE_INFO)
+        self.assertEqual(payload["subtitles"], [])
+
+    def test_gallery_has_no_subtitle_choices(self):
+        info = {**SUBTITLE_INFO, "entries": [{"ext": "jpg", "url": "https://cdn.example.com/1.jpg"}, {"ext": "jpg"}]}
+        self.assertEqual(media_app._media_payload(self.url, info)["subtitles"], [])
+
+    @patch("app._validate_public_url", side_effect=lambda value: value)
+    @patch("app._download_with_retry")
+    def test_download_endpoint_attaches_selected_subtitle(self, download_mock, _validate):
+        captured = {}
+
+        def fake_download(payload, folder, progress=None, cancelled=None):
+            captured.update(payload)
+            result = folder / "video.mp4"
+            result.write_bytes(b"video")
+            return result
+
+        download_mock.side_effect = fake_download
+        video_token = media_app._make_token(self.url, "video", height=720)
+        subtitle_token = media_app._make_token(self.url, "subtitle", lang="id-orig", automatic=True)
+        response = self.client.get(f"/api/download/{video_token}?subtitle={subtitle_token}")
+        self.assertEqual(response.status_code, 200)
+        b"".join(response.response)
+        self.assertEqual(captured["subtitle"], {"lang": "id-orig", "automatic": True})
+
+    @patch("app._validate_public_url", side_effect=lambda value: value)
+    def test_subtitle_token_must_match_the_video(self, _validate):
+        video_token = media_app._make_token(self.url, "video", height=720)
+        other = media_app._make_token("https://www.youtube.com/watch?v=other", "subtitle", lang="en", automatic=False)
+        response = self.client.get(f"/api/download/{video_token}?subtitle={other}")
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("tidak cocok", response.get_json()["error"])
+
+    @patch("app._validate_public_url", side_effect=lambda value: value)
+    def test_subtitle_is_rejected_for_audio_and_tampering(self, _validate):
+        audio_token = media_app._make_token(self.url, "audio", codec="mp3", bitrate=128)
+        subtitle_token = media_app._make_token(self.url, "subtitle", lang="en", automatic=False)
+        audio = self.client.get(f"/api/download/{audio_token}?subtitle={subtitle_token}")
+        self.assertEqual(audio.status_code, 422)
+        video_token = media_app._make_token(self.url, "video", height=720)
+        tampered = self.client.get(f"/api/download/{video_token}?subtitle={subtitle_token}x")
+        self.assertEqual(tampered.status_code, 400)
+
+    def test_automatic_json3_becomes_clean_single_line_srt(self):
+        cues = media_app._json3_cues(AUTO_JSON3, automatic=True)
+        self.assertEqual(cues, [(200, 2000, "halo semuanya"), (2000, 6000, "baris kedua")])
+        self.assertEqual(
+            media_app._srt_from_cues(cues),
+            "1\n00:00:00,200 --> 00:00:02,000\nhalo semuanya\n\n"
+            "2\n00:00:02,000 --> 00:00:06,000\nbaris kedua\n",
+        )
+
+    def test_manual_json3_keeps_original_timing(self):
+        cues = media_app._json3_cues(AUTO_JSON3, automatic=False)
+        self.assertEqual(cues[0], (200, 4000, "halo semuanya"))
+
+    def test_prepare_subtitle_converts_json3_and_ignores_video(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            (folder / "Video [abc].mp4").write_bytes(b"video")
+            (folder / "Video [abc].id-orig.json3").write_text(json.dumps(AUTO_JSON3), encoding="utf-8")
+            self.assertEqual(media_app._find_downloaded_file(folder).name, "Video [abc].mp4")
+            subtitle = media_app._prepare_subtitle(folder, {"lang": "id-orig", "automatic": True})
+            self.assertEqual(subtitle.name, "linkdrop-subtitle.srt")
+            self.assertIn("halo semuanya", subtitle.read_text(encoding="utf-8"))
+
+    def test_prepare_subtitle_reports_missing_track(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with self.assertRaisesRegex(media_app.UserFacingError, "tidak tersedia"):
+                media_app._prepare_subtitle(Path(folder), {"lang": "en", "automatic": False})
+
+    def test_failed_subtitle_download_is_actionable(self):
+        message = media_app._friendly_error(Exception(
+            "ERROR: Unable to download video subtitles for 'en': HTTP Error 429: Too Many Requests"
+        ))
+        self.assertIn("Subtitle gagal diambil", message)
+
+    def test_video_download_requests_and_burns_selected_subtitle(self):
+        captured = {}
+
+        class FakeYoutubeDL:
+            def __init__(self, options):
+                captured["options"] = options
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def download(self, urls):
+                folder = Path(captured["options"]["outtmpl"]).parent
+                (folder / "Video [abc].mp4").write_bytes(b"video")
+                (folder / "Video [abc].en-US.json3").write_text(json.dumps(AUTO_JSON3), encoding="utf-8")
+
+        def fake_burn(path, progress=None, cancelled=None, subtitle=None):
+            captured["subtitle"] = subtitle.read_text(encoding="utf-8")
+            return path
+
+        payload = {"url": self.url, "kind": "video", "height": 720, "subtitle": {"lang": "en-US", "automatic": False}}
+        with tempfile.TemporaryDirectory() as folder, \
+                patch.object(media_app.yt_dlp, "YoutubeDL", FakeYoutubeDL), \
+                patch.object(media_app, "_ensure_compatible_mp4", fake_burn):
+            result = media_app._download_video_or_audio(payload, Path(folder))
+
+        options = captured["options"]
+        self.assertTrue(options["writesubtitles"])
+        self.assertFalse(options["writeautomaticsub"])
+        self.assertEqual(options["subtitleslangs"], ["en\\-US"])
+        self.assertEqual(result.name, "Video [abc].mp4")
+        self.assertIn("halo semuanya", captured["subtitle"])
+
+    @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "FFmpeg is required")
+    def test_subtitle_is_burned_into_the_picture(self):
+        def bottom_brightness(video: Path) -> int:
+            frame = subprocess.run(
+                ["ffmpeg", "-v", "error", "-ss", "1", "-i", str(video), "-frames:v", "1",
+                 "-vf", "crop=320:60:0:180", "-f", "rawvideo", "-pix_fmt", "gray", "-"],
+                check=True, capture_output=True,
+            ).stdout
+            return max(frame)
+
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            video = folder / "Video [abc].mp4"
+            subprocess.run(
+                ["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=black:size=320x240:rate=10:duration=3",
+                 "-c:v", "libx264", "-pix_fmt", "yuv420p", str(video)],
+                check=True,
+            )
+            self.assertLess(bottom_brightness(video), 40)
+            (folder / "linkdrop-subtitle.srt").write_text(
+                "1\n00:00:00,000 --> 00:00:03,000\nHALO SEMUANYA\n", encoding="utf-8"
+            )
+            events = []
+            result = media_app._ensure_compatible_mp4(video, events.append, None, folder / "linkdrop-subtitle.srt")
+
+            self.assertEqual(result, video)
+            self.assertGreater(bottom_brightness(result), 200)
+            self.assertFalse((folder / "Video [abc].linkdrop.mp4").exists())
+            self.assertEqual(events[0]["phase"], "Menempelkan subtitle ke video")
 
 
 if __name__ == "__main__":
