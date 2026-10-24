@@ -60,7 +60,32 @@ Register-ScheduledTask -TaskName "Linkdrop auto-update" -Action $action -Trigger
 
 The task runs while you are signed in, which is also when Docker Desktop runs. A PowerShell window may flash briefly at each run. Messages are written to `%USERPROFILE%\.linkdrop\update.log`.
 
-macOS and Linux: run `crontab -e` and add this line, replacing the path with your clone:
+macOS: use launchd, the scheduler built into macOS. Run these commands in Terminal from the `Linkdrop` folder:
+
+```bash
+mkdir -p ~/.linkdrop ~/Library/LaunchAgents
+cp scripts/update-linkdrop.sh ~/.linkdrop/update-linkdrop.sh
+cat > ~/Library/LaunchAgents/com.linkdrop.autoupdate.plist <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.linkdrop.autoupdate</string>
+  <key>ProgramArguments</key>
+  <array><string>/bin/bash</string><string>$HOME/.linkdrop/update-linkdrop.sh</string></array>
+  <key>StartInterval</key><integer>900</integer>
+  <key>RunAtLoad</key><true/>
+  <key>StandardOutPath</key><string>$HOME/.linkdrop/update.log</string>
+  <key>StandardErrorPath</key><string>$HOME/.linkdrop/update.log</string>
+</dict>
+</plist>
+EOF
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.linkdrop.autoupdate.plist
+```
+
+The script is copied to `~/.linkdrop` because macOS blocks background jobs from reading files in `Documents`, `Desktop`, and `Downloads`. If a future update changes `scripts/update-linkdrop.sh`, copy it again after `git pull`. In Docker Desktop, turn on **Settings → General → Start Docker Desktop when you sign in** so Linkdrop is back after a restart. Messages are written to `~/.linkdrop/update.log`.
+
+Linux: run `crontab -e` and add this line, replacing the path with your clone:
 
 ```text
 */15 * * * * /path/to/Linkdrop/scripts/update-linkdrop.sh >> "$HOME/.linkdrop/update.log" 2>&1
@@ -84,7 +109,8 @@ On Windows, run the `.ps1` script instead. `LINKDROP_PORT` in the same file sets
 ## Turn it off
 
 - Windows: `Unregister-ScheduledTask -TaskName "Linkdrop auto-update" -Confirm:$false`
-- macOS and Linux: remove the line with `crontab -e`
+- macOS: `launchctl bootout gui/$(id -u)/com.linkdrop.autoupdate`, then delete `~/Library/LaunchAgents/com.linkdrop.autoupdate.plist`
+- Linux: remove the line with `crontab -e`
 
 The running container keeps working; it simply stops receiving updates.
 

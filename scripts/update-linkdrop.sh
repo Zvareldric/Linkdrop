@@ -10,8 +10,9 @@
 # from an existing "linkdrop" container, or a new token secret is generated.
 set -euo pipefail
 
-# cron starts with a minimal PATH; Docker Desktop installs its CLI here.
-export PATH="$PATH:/usr/local/bin:/opt/homebrew/bin"
+# cron and launchd start with a minimal PATH. Docker Desktop for Mac puts
+# docker and its credential helper in one of these, depending on the install.
+export PATH="$PATH:/usr/local/bin:/opt/homebrew/bin:$HOME/.docker/bin:/Applications/Docker.app/Contents/Resources/bin"
 
 IMAGE="${LINKDROP_IMAGE:-ghcr.io/zvareldric/linkdrop:latest}"
 NAME="${LINKDROP_CONTAINER:-linkdrop}"
