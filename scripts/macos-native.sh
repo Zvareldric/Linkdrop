@@ -141,8 +141,18 @@ restart_server() { launchctl kickstart -k "$DOMAIN/$SERVER_LABEL"; }
 
 port_owner() { lsof -nP -iTCP:"$(port)" -sTCP:LISTEN 2>/dev/null | sed -n '2p' || true; }
 
+# launchctl bootout returns before the process exits, and gunicorn keeps the
+# port while it finishes open connections (Tailscale Serve keeps some alive).
+wait_port_free() {
+    local deadline=$((SECONDS + 45))
+    while [ -n "$(port_owner)" ] && [ "$SECONDS" -lt "$deadline" ]; do
+        sleep 1
+    done
+    [ -z "$(port_owner)" ]
+}
+
 stop_docker_setup() {
-    local agent="$AGENTS_DIR/com.linkdrop.autoupdate.plist"
+    local quiet="${1:-}" agent="$AGENTS_DIR/com.linkdrop.autoupdate.plist"
     if [ -f "$agent" ]; then
         launchctl bootout "$DOMAIN/com.linkdrop.autoupdate" >/dev/null 2>&1 || true
         mkdir -p "$BASE_DIR/backup"
@@ -151,6 +161,8 @@ stop_docker_setup() {
     fi
     command -v docker >/dev/null 2>&1 || return 0
     if ! docker info >/dev/null 2>&1; then
+        # After the first native install the Docker setup is already gone.
+        [ -n "$quiet" ] && return 0
         log "Docker Desktop tidak berjalan. Jika container linkdrop lama masih ada, ia akan merebut port $(port) saat Docker dibuka; hapus dengan: docker rm -f linkdrop"
     elif docker container inspect linkdrop >/dev/null 2>&1; then
         docker rm --force linkdrop >/dev/null
@@ -173,7 +185,7 @@ cmd_serve() {
     mkdir -p "$WORK_DIR"
     cd "$APP_DIR"
     exec "$VENV_DIR/bin/gunicorn" --bind "127.0.0.1:$(port)" --workers 1 --threads 4 \
-        --timeout 0 --access-logfile - app:app
+        --timeout 0 --graceful-timeout 10 --access-logfile - app:app
 }
 
 cmd_install() {
@@ -212,12 +224,19 @@ cmd_install() {
     fi
 
     cp "$APP_DIR/scripts/macos-native.sh" "$SELF.tmp" && mv "$SELF.tmp" "$SELF"
-    stop_docker_setup
+    local had_server=""
+    [ -f "$AGENTS_DIR/$SERVER_LABEL.plist" ] && had_server=1
+    stop_docker_setup "$had_server"
 
     launchctl bootout "$DOMAIN/$SERVER_LABEL" >/dev/null 2>&1 || true
-    if [ -n "$(port_owner)" ]; then
+    if ! wait_port_free; then
         log "Port $(port) masih dipakai program lain:"
         port_owner
+        if [ -n "$had_server" ]; then
+            # Never leave the user without the version that was running.
+            load_agent "$SERVER_LABEL" || true
+            log "Layanan Linkdrop sebelumnya dijalankan kembali."
+        fi
         die "Hentikan program itu dulu (misalnya layanan Linkdrop lama), lalu jalankan install lagi."
     fi
 
