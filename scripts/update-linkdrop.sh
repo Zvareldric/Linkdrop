@@ -10,8 +10,9 @@
 # from an existing "linkdrop" container, or a new token secret is generated.
 set -euo pipefail
 
-# cron starts with a minimal PATH; Docker Desktop installs its CLI here.
-export PATH="$PATH:/usr/local/bin:/opt/homebrew/bin"
+# cron and launchd start with a minimal PATH. Docker Desktop for Mac puts
+# docker and its credential helper in one of these, depending on the install.
+export PATH="$PATH:/usr/local/bin:/opt/homebrew/bin:$HOME/.docker/bin:/Applications/Docker.app/Contents/Resources/bin"
 
 IMAGE="${LINKDROP_IMAGE:-ghcr.io/zvareldric/linkdrop:latest}"
 NAME="${LINKDROP_CONTAINER:-linkdrop}"
@@ -26,6 +27,15 @@ log() { printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"; }
 container_exists() { docker container inspect "$NAME" >/dev/null 2>&1; }
 
 env_value() { grep -E "^$1=" "$ENV_FILE" | tail -n 1 | cut -d= -f2- || true; }
+
+if ! command -v docker >/dev/null 2>&1; then
+    log "Perintah docker tidak ditemukan. Pasang Docker Desktop, buka aplikasinya sekali sampai selesai, lalu jalankan skrip ini lagi."
+    exit 1
+fi
+if ! docker info >/dev/null 2>&1; then
+    log "Docker belum berjalan. Buka Docker Desktop, tunggu sampai statusnya running, lalu jalankan skrip ini lagi."
+    exit 1
+fi
 
 mkdir -p "$CONFIG_DIR"
 chmod 700 "$CONFIG_DIR"
@@ -86,10 +96,21 @@ if [ "$running" = "true" ] && [ -f "$FAILED_FILE" ] && [ "$(cat "$FAILED_FILE")"
 fi
 
 start_container() {
-    docker run --detach --name "$NAME" --restart unless-stopped \
+    local output
+    if output="$(docker run --detach --name "$NAME" --restart unless-stopped \
         --publish "127.0.0.1:$PORT:8080" \
         --env-file "$ENV_FILE" \
-        "$1" >/dev/null
+        "$1" 2>&1)"; then
+        return 0
+    fi
+    docker rm --force "$NAME" >/dev/null 2>&1 || true
+    if printf '%s' "$output" | grep -qiE 'address already in use|port is already allocated|ports are not available'; then
+        log "Port $PORT sudah dipakai program lain, misalnya Linkdrop lama yang berjalan dengan gunicorn."
+        log "Hentikan program itu dulu (cari dengan: lsof -nP -iTCP:$PORT -sTCP:LISTEN), lalu jalankan skrip ini lagi."
+    else
+        log "Container gagal dibuat: $output"
+    fi
+    return 1
 }
 
 healthy() {
@@ -105,32 +126,33 @@ healthy() {
 
 log "Memasang versi baru Linkdrop…"
 docker rm --force "$NAME" >/dev/null 2>&1 || true
-start_container "$latest"
-
-if healthy; then
-    version="$(curl --silent --noproxy '*' "http://127.0.0.1:$PORT/api/health" \
-        | sed -n 's/.*"version": *"\([^"]*\)".*/\1/p')"
-    log "Linkdrop diperbarui ke versi ${version:-baru} di http://127.0.0.1:$PORT."
-    rm -f "$FAILED_FILE"
-    # Remove the replaced image only when nothing names it any more (an old
-    # pull); an image the user built and tagged themselves is kept.
-    if [ -n "$current" ] && [ "$current" != "$latest" ] \
-        && [ "$(docker image inspect --format '{{len .RepoTags}}' "$current" 2>/dev/null)" = "0" ]; then
-        docker image rm "$current" >/dev/null 2>&1 || true
+if start_container "$latest"; then
+    if healthy; then
+        version="$(curl --silent --noproxy '*' "http://127.0.0.1:$PORT/api/health" \
+            | sed -n 's/.*"version": *"\([^"]*\)".*/\1/p')"
+        log "Linkdrop diperbarui ke versi ${version:-baru} di http://127.0.0.1:$PORT."
+        rm -f "$FAILED_FILE"
+        # Remove the replaced image only when nothing names it any more (an old
+        # pull); an image the user built and tagged themselves is kept.
+        if [ -n "$current" ] && [ "$current" != "$latest" ] \
+            && [ "$(docker image inspect --format '{{len .RepoTags}}' "$current" 2>/dev/null)" = "0" ]; then
+            docker image rm "$current" >/dev/null 2>&1 || true
+        fi
+        exit 0
     fi
-    exit 0
+    # Only an image that started but never answered is remembered as broken;
+    # a busy port is not the image's fault.
+    log "Versi baru tidak merespons. Log terakhir:"
+    docker logs --tail 5 "$NAME" 2>&1 || true
+    printf '%s\n' "$latest" > "$FAILED_FILE"
+    docker rm --force "$NAME" >/dev/null 2>&1 || true
 fi
 
-log "Versi baru tidak merespons. Log terakhir:"
-docker logs --tail 5 "$NAME" 2>&1 || true
-printf '%s\n' "$latest" > "$FAILED_FILE"
-docker rm --force "$NAME" >/dev/null 2>&1 || true
 if [ -n "$current" ]; then
-    start_container "$current"
-    if healthy; then
+    if start_container "$current" && healthy; then
         log "Versi sebelumnya dijalankan kembali."
     else
-        log "Versi sebelumnya juga tidak merespons. Periksa: docker logs $NAME"
+        log "Versi sebelumnya juga tidak dapat dijalankan. Periksa: docker logs $NAME"
     fi
 fi
 exit 1

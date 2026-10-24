@@ -60,7 +60,32 @@ Register-ScheduledTask -TaskName "Linkdrop auto-update" -Action $action -Trigger
 
 Tugas ini berjalan selama Anda login, sama seperti Docker Desktop. Jendela PowerShell mungkin muncul sekilas setiap kali tugas berjalan. Pesan dicatat di `%USERPROFILE%\.linkdrop\update.log`.
 
-macOS dan Linux: jalankan `crontab -e` lalu tambahkan baris ini, dengan path diganti ke clone Anda:
+macOS: gunakan launchd, penjadwal bawaan macOS. Jalankan perintah ini di Terminal dari folder `Linkdrop`:
+
+```bash
+mkdir -p ~/.linkdrop ~/Library/LaunchAgents
+cp scripts/update-linkdrop.sh ~/.linkdrop/update-linkdrop.sh
+cat > ~/Library/LaunchAgents/com.linkdrop.autoupdate.plist <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.linkdrop.autoupdate</string>
+  <key>ProgramArguments</key>
+  <array><string>/bin/bash</string><string>$HOME/.linkdrop/update-linkdrop.sh</string></array>
+  <key>StartInterval</key><integer>900</integer>
+  <key>RunAtLoad</key><true/>
+  <key>StandardOutPath</key><string>$HOME/.linkdrop/update.log</string>
+  <key>StandardErrorPath</key><string>$HOME/.linkdrop/update.log</string>
+</dict>
+</plist>
+EOF
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.linkdrop.autoupdate.plist
+```
+
+Skrip disalin ke `~/.linkdrop` karena macOS memblokir tugas latar belakang membaca file di `Documents`, `Desktop`, dan `Downloads`. Jika suatu saat `scripts/update-linkdrop.sh` berubah, salin ulang setelah `git pull`. Di Docker Desktop, aktifkan **Settings → General → Start Docker Desktop when you sign in** supaya Linkdrop kembali berjalan setelah restart. Pesan dicatat di `~/.linkdrop/update.log`.
+
+Linux: jalankan `crontab -e` lalu tambahkan baris ini, dengan path diganti ke clone Anda:
 
 ```text
 */15 * * * * /path/ke/Linkdrop/scripts/update-linkdrop.sh >> "$HOME/.linkdrop/update.log" 2>&1
@@ -84,7 +109,8 @@ Di Windows, jalankan skrip `.ps1`. `LINKDROP_PORT` di file yang sama menentukan 
 ## Mematikan pembaruan otomatis
 
 - Windows: `Unregister-ScheduledTask -TaskName "Linkdrop auto-update" -Confirm:$false`
-- macOS dan Linux: hapus barisnya lewat `crontab -e`
+- macOS: `launchctl bootout gui/$(id -u)/com.linkdrop.autoupdate`, lalu hapus `~/Library/LaunchAgents/com.linkdrop.autoupdate.plist`
+- Linux: hapus barisnya lewat `crontab -e`
 
 Container yang sedang berjalan tetap bekerja; hanya pembaruannya yang berhenti.
 
