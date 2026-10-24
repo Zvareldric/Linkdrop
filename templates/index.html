@@ -1129,10 +1129,10 @@
       </div>
 
       <div id="singlePanel" role="tabpanel" aria-labelledby="singleModeButton">
-      <form id="analyzeForm">
+      <form id="analyzeForm" autocomplete="off">
         <label class="input-label" for="urlInput" data-i18n="pasteMediaLink">Tempel link media</label>
         <div class="input-shell">
-          <input class="url-input" id="urlInput" type="url" inputmode="url" autocomplete="url" placeholder="https://..." required>
+          <input class="url-input" id="urlInput" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://..." required>
         </div>
         <div class="input-actions">
           <button class="button button-quiet" id="pasteButton" type="button" data-i18n="paste">Tempel</button>
@@ -1175,10 +1175,10 @@
       </div>
 
       <div class="batch-panel" id="batchPanel" role="tabpanel" aria-labelledby="batchModeButton">
-        <form id="batchForm">
+        <form id="batchForm" autocomplete="off">
           <label class="input-label" for="batchInput" data-i18n="pasteMultipleLinks">Tempel beberapa link</label>
           <div class="batch-input-shell">
-            <textarea class="batch-textarea" id="batchInput" inputmode="url" placeholder="Satu link per baris" data-i18n-placeholder="oneLinkPerLine" required></textarea>
+            <textarea class="batch-textarea" id="batchInput" inputmode="url" autocomplete="off" spellcheck="false" placeholder="Satu link per baris" data-i18n-placeholder="oneLinkPerLine" required></textarea>
           </div>
           <div class="batch-input-actions">
             <button class="button button-quiet" id="batchPasteButton" type="button" data-i18n="paste">Tempel</button>
