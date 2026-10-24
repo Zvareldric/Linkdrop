@@ -66,6 +66,8 @@ Open [http://127.0.0.1:5050](http://127.0.0.1:5050). The container binds only to
 
 ## macOS and Linux
 
+On a Mac, `./scripts/macos-native.sh install` sets up everything below as a background service with automatic updates and no Docker; see [macOS without Docker](docs/MACOS.md).
+
 Install Python 3.12, FFmpeg, Git, and Deno first. On macOS with Homebrew:
 
 ```bash
@@ -99,6 +101,7 @@ Open [http://127.0.0.1:5000](http://127.0.0.1:5000). Linux users should install 
 - [Private phone access](docs/TAILSCALE.md) — access Linkdrop safely through Tailscale.
 - [Public access without a VPS](docs/CLOUDFLARE_TUNNEL.md) — publish Linkdrop from your computer with Cloudflare Tunnel and a password.
 - [Automatic updates](docs/AUTO_UPDATE.md) — keep Linkdrop on your computer in sync with this repository.
+- [macOS without Docker](docs/MACOS.md) — run Linkdrop natively on a Mac as a background service with automatic updates.
 - [Deployment](docs/DEPLOYMENT.md) — persistent hosting and operational limits.
 - [Architecture](docs/ARCHITECTURE.md) — media flow, temporary files, and security model.
 

@@ -98,7 +98,7 @@ PORT=5050 gunicorn --bind 127.0.0.1:5050 --workers 1 --threads 4 --timeout 0 app
 
 Pastikan aplikasi Tailscale tersambung. Cegah komputer host masuk ke mode sleep selama download panjang atau konversi video.
 
-Agar Linkdrop berjalan sendiri setelah restart dan ikut ter-update setiap repository berubah, jalankan lewat Docker dengan [pembaruan otomatis](AUTO_UPDATE.id.md). Port tetap `5050`, jadi konfigurasi `tailscale serve` tidak perlu diubah.
+Agar Linkdrop berjalan sendiri setelah restart dan ikut ter-update setiap repository berubah, gunakan [macOS tanpa Docker](MACOS.id.md) di Mac, atau Docker dengan [pembaruan otomatis](AUTO_UPDATE.id.md) di sistem lain. Port tetap `5050`, jadi konfigurasi `tailscale serve` tidak perlu diubah.
 
 ## Hentikan akses privat
 

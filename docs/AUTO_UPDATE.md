@@ -4,6 +4,8 @@
 
 Linkdrop on your computer can update itself whenever the GitHub repository changes. Tailscale Serve and Cloudflare Tunnel keep forwarding to the same local port, so your private or public address shows the new version without any other change.
 
+On a Mac, prefer [macOS without Docker](MACOS.md): it updates the same way without the memory cost of Docker Desktop.
+
 ## How it works
 
 1. After every change to `main` passes the tests, GitHub Actions publishes a Docker image to `ghcr.io/zvareldric/linkdrop:latest`. The image is also rebuilt every Monday, so it picks up new yt-dlp releases even when the code has not changed.
