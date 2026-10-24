@@ -171,90 +171,171 @@ test("pilihan bahasa menerjemahkan antarmuka tanpa mengubah layout", async ({ pa
   await expect(page.getByRole("heading", { name: "Pilih kualitasnya. Simpan medianya." })).toBeVisible();
 });
 
-test("alur analisis berakhir pada tombol simpan yang dapat mengunduh file", async ({ page }) => {
+const IPHONE_USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";
+
+async function openSingleResult(page, payload = mediaPayload) {
   await page.route("**/api/info", route => route.fulfill({
     status: 200,
     contentType: "application/json",
-    body: JSON.stringify(mediaPayload)
+    body: JSON.stringify(payload)
   }));
-
-  await mockJob(page, {
-    statuses: [{ state: "running", percent: 48, phase: "Mengunduh media", detail: "2.4 MB/s" }, readyJob("contoh.mp4")]
-  });
-
   await page.getByLabel("Tempel link media").fill("https://example.com/video");
   await page.getByRole("button", { name: "Lihat pilihan" }).click();
-  await expect(page.getByText("Contoh media untuk pengujian")).toBeVisible();
+  await expect(page.getByText(payload.title)).toBeVisible();
+}
 
-  await page.getByRole("link", { name: /720p/ }).click();
-  await expect(page.getByText("Boleh pindah aplikasi atau mematikan layar", { exact: false })).toBeVisible();
+test.describe("simpan otomatis saat file siap", () => {
+  // iPhone Safari only allows downloads started by a tap; see the next group.
+  test.skip(({ browserName }) => browserName === "webkit", "iPhone Safari memakai tombol simpan");
 
-  await expect(page.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "100");
-  await expect(page.getByRole("progressbar").getByText("File siap disimpan", { exact: true })).toBeVisible();
-  const saveDialog = page.getByRole("dialog", { name: "File siap disimpan" });
-  await expect(saveDialog).toBeVisible();
-  const filenameInput = saveDialog.getByLabel("Nama file");
-  await expect(filenameInput).toHaveValue("contoh.mp4");
+  test("file langsung disimpan dan tombol simpan tetap tersedia sebagai cadangan", async ({ page }) => {
+    await openSingleResult(page);
+    await mockJob(page, {
+      statuses: [{ state: "running", percent: 48, phase: "Mengunduh media", detail: "2.4 MB/s" }, readyJob("contoh.mp4")]
+    });
 
-  const saveBox = await saveDialog.getByRole("button", { name: "Simpan sekarang", exact: true }).boundingBox();
-  expect(saveBox.height).toBeGreaterThanOrEqual(44);
-  await saveDialog.getByRole("button", { name: "Nanti saja", exact: true }).click();
-  await expect(saveDialog).toBeHidden();
-  await page.getByRole("button", { name: "Simpan ke perangkat", exact: true }).click();
-  await expect(saveDialog).toBeVisible();
-  await saveDialog.press("Escape");
-  await expect(saveDialog).toBeHidden();
-  await page.getByRole("button", { name: "Simpan ke perangkat", exact: true }).click();
-  await filenameInput.fill("hasil-pengujian");
+    const autoDownload = page.waitForEvent("download");
+    await page.getByRole("link", { name: /720p/ }).click();
+    await expect(page.getByText("Server sedang menyiapkan file", { exact: false })).toBeVisible();
+    expect((await autoDownload).suggestedFilename()).toBe("contoh.mp4");
 
-  const downloadPromise = page.waitForEvent("download");
-  await saveDialog.getByRole("button", { name: "Simpan sekarang", exact: true }).click();
-  const download = await downloadPromise;
+    await expect(page.getByRole("progressbar").getByText("Menyimpan ke perangkat", { exact: true })).toBeVisible();
+    await expect(page.getByText("Browser sedang memindahkan contoh.mp4 ke perangkat ini", { exact: false })).toBeVisible();
+    await expect(page.getByText("Jika unduhan tidak muncul", { exact: false })).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "File siap disimpan" })).toBeHidden();
+    expect(await page.evaluate(() => localStorage.getItem("linkdrop-active-job"))).toBeNull();
 
-  expect(download.suggestedFilename()).toBe("hasil-pengujian.mp4");
-  await expect(page.getByText("File diunduh oleh browser", { exact: false })).toBeVisible();
-});
-
-test("unduhan tetap berlanjut setelah koneksi putus saat layar mati", async ({ page }) => {
-  await page.route("**/api/info", route => route.fulfill({
-    status: 200,
-    contentType: "application/json",
-    body: JSON.stringify(mediaPayload)
-  }));
-  await mockJob(page, {
-    statuses: [
-      { state: "running", percent: 30, phase: "Mengunduh media", detail: "1 MB/s" },
-      "offline",
-      "offline",
-      readyJob("contoh.mp4")
-    ]
+    await page.getByRole("button", { name: "Simpan ke perangkat", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "File siap disimpan" });
+    await expect(dialog.getByText("memindahkan file dari server ke perangkat ini", { exact: false })).toBeVisible();
+    await dialog.getByLabel("Nama file").fill("salinan");
+    const manualDownload = page.waitForEvent("download");
+    await dialog.getByRole("button", { name: "Simpan sekarang", exact: true }).click();
+    expect((await manualDownload).suggestedFilename()).toBe("salinan.mp4");
   });
 
-  await page.getByLabel("Tempel link media").fill("https://example.com/video");
-  await page.getByRole("button", { name: "Lihat pilihan" }).click();
-  await page.getByRole("link", { name: /720p/ }).click();
+  test("file yang selesai saat halaman tersembunyi disimpan ketika halaman dibuka lagi", async ({ page }) => {
+    await page.evaluate(() => {
+      let state = "hidden";
+      Object.defineProperty(document, "visibilityState", { get: () => state, configurable: true });
+      window.__showPage = () => {
+        state = "visible";
+        document.dispatchEvent(new Event("visibilitychange"));
+      };
+    });
+    let downloads = 0;
+    page.on("download", () => { downloads += 1; });
+    await openSingleResult(page);
+    await mockJob(page, { statuses: [readyJob("contoh.mp4")] });
 
-  await expect(page.getByText("Menunggu koneksi ke server", { exact: false })).toBeVisible();
-  await expect(page.getByRole("dialog", { name: "File siap disimpan" })).toBeVisible({ timeout: 15000 });
-  await expect(page.getByText("Unduhan gagal", { exact: true })).toBeHidden();
+    await page.getByRole("link", { name: /720p/ }).click();
+    await expect(page.getByRole("progressbar").getByText("File siap di server", { exact: true })).toBeVisible();
+    await page.waitForTimeout(1500);
+    expect(downloads).toBe(0);
+
+    const download = page.waitForEvent("download");
+    await page.evaluate(() => window.__showPage());
+    expect((await download).suggestedFilename()).toBe("contoh.mp4");
+  });
+
+  test("unduhan tetap berlanjut setelah koneksi putus saat layar mati", async ({ page }) => {
+    await openSingleResult(page);
+    await mockJob(page, {
+      statuses: [
+        { state: "running", percent: 30, phase: "Mengunduh media", detail: "1 MB/s" },
+        "offline",
+        "offline",
+        readyJob("contoh.mp4")
+      ]
+    });
+
+    const download = page.waitForEvent("download", { timeout: 20000 });
+    await page.getByRole("link", { name: /720p/ }).click();
+    await expect(page.getByText("Menunggu koneksi ke server", { exact: false })).toBeVisible();
+    expect((await download).suggestedFilename()).toBe("contoh.mp4");
+    await expect(page.getByText("Unduhan gagal", { exact: true })).toBeHidden();
+  });
 });
 
-test("proses yang berjalan dilanjutkan setelah halaman dimuat ulang", async ({ page }) => {
-  await mockJob(page, {
-    statuses: [{ state: "running", percent: 64, phase: "Mengonversi video", detail: "64%" }, readyJob("lanjutan.mp4")]
+test.describe("iPhone menyimpan file lewat tombol", () => {
+  test.use({ userAgent: IPHONE_USER_AGENT });
+
+  test("alur analisis berakhir pada tombol simpan yang dapat mengunduh file", async ({ page }) => {
+    await openSingleResult(page);
+    await mockJob(page, {
+      statuses: [{ state: "running", percent: 48, phase: "Mengunduh media", detail: "2.4 MB/s" }, readyJob("contoh.mp4")]
+    });
+
+    await page.getByRole("link", { name: /720p/ }).click();
+    await expect(page.getByText("Server sedang menyiapkan file", { exact: false })).toBeVisible();
+
+    await expect(page.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "100");
+    await expect(page.getByRole("progressbar").getByText("File siap di server", { exact: true })).toBeVisible();
+    const saveDialog = page.getByRole("dialog", { name: "File siap disimpan" });
+    await expect(saveDialog).toBeVisible();
+    await expect(saveDialog.getByText("memindahkan file dari server ke perangkat ini", { exact: false })).toBeVisible();
+    const filenameInput = saveDialog.getByLabel("Nama file");
+    await expect(filenameInput).toHaveValue("contoh.mp4");
+
+    const saveBox = await saveDialog.getByRole("button", { name: "Simpan sekarang", exact: true }).boundingBox();
+    expect(saveBox.height).toBeGreaterThanOrEqual(44);
+    await saveDialog.getByRole("button", { name: "Nanti saja", exact: true }).click();
+    await expect(saveDialog).toBeHidden();
+    await page.getByRole("button", { name: "Simpan ke perangkat", exact: true }).click();
+    await expect(saveDialog).toBeVisible();
+    await saveDialog.press("Escape");
+    await expect(saveDialog).toBeHidden();
+    await page.getByRole("button", { name: "Simpan ke perangkat", exact: true }).click();
+    await filenameInput.fill("hasil-pengujian");
+
+    const downloadPromise = page.waitForEvent("download");
+    await saveDialog.getByRole("button", { name: "Simpan sekarang", exact: true }).click();
+    const download = await downloadPromise;
+
+    expect(download.suggestedFilename()).toBe("hasil-pengujian.mp4");
+    await expect(page.getByRole("progressbar").getByText("Menyimpan ke perangkat", { exact: true })).toBeVisible();
+    await expect(page.getByText("Browser sedang memindahkan hasil-pengujian.mp4", { exact: false })).toBeVisible();
+    await expect(page.getByText("Jika unduhan tidak muncul", { exact: false })).toBeHidden();
   });
-  await page.evaluate(() => localStorage.setItem("linkdrop-active-job", JSON.stringify({ id: "job-1", label: "720p" })));
-  await page.reload();
 
-  await expect(page.getByRole("progressbar").getByText("Mengonversi video", { exact: true })).toBeVisible();
-  const dialog = page.getByRole("dialog", { name: "File siap disimpan" });
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByLabel("Nama file")).toHaveValue("lanjutan.mp4");
+  test("proses yang berjalan dilanjutkan setelah halaman dimuat ulang", async ({ page }) => {
+    await mockJob(page, {
+      statuses: [{ state: "running", percent: 64, phase: "Mengonversi video", detail: "64%" }, readyJob("lanjutan.mp4")]
+    });
+    await page.evaluate(() => localStorage.setItem("linkdrop-active-job", JSON.stringify({ id: "job-1", label: "720p" })));
+    await page.reload();
 
-  const downloadPromise = page.waitForEvent("download");
-  await dialog.getByRole("button", { name: "Simpan sekarang", exact: true }).click();
-  expect((await downloadPromise).suggestedFilename()).toBe("lanjutan.mp4");
-  expect(await page.evaluate(() => localStorage.getItem("linkdrop-active-job"))).toBeNull();
+    await expect(page.getByRole("progressbar").getByText("Mengonversi video", { exact: true })).toBeVisible();
+    const dialog = page.getByRole("dialog", { name: "File siap disimpan" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByLabel("Nama file")).toHaveValue("lanjutan.mp4");
+
+    const downloadPromise = page.waitForEvent("download");
+    await dialog.getByRole("button", { name: "Simpan sekarang", exact: true }).click();
+    expect((await downloadPromise).suggestedFilename()).toBe("lanjutan.mp4");
+    expect(await page.evaluate(() => localStorage.getItem("linkdrop-active-job"))).toBeNull();
+  });
+
+  test("dialog simpan dan informasi batas tetap muat untuk nama file yang sangat panjang", async ({ page }) => {
+    const longName = `${"file_media_sangat_panjang_".repeat(12)}.mp4`;
+    await openSingleResult(page, { ...mediaPayload, title: "judul_media_sangat_panjang_tanpa_spasi_untuk_menguji_lebar_layar_mobile" });
+    await mockJob(page, { statuses: [readyJob(longName, 1)] });
+
+    await page.getByRole("link", { name: /720p/ }).click();
+
+    const dialog = page.getByRole("dialog", { name: "File siap disimpan" });
+    await expect(dialog).toBeVisible();
+    const fitsViewport = await dialog.evaluate(element => {
+      const box = element.getBoundingClientRect();
+      return box.left >= 0 && box.right <= window.innerWidth;
+    });
+    expect(fitsViewport).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+    const maxFile = page.locator("#singlePanel .helper > span:last-child");
+    const maxFileFits = await maxFile.evaluate(element => element.getBoundingClientRect().right <= window.innerWidth);
+    expect(maxFileFits).toBe(true);
+  });
 });
 
 test("proses yang sudah kedaluwarsa tidak dimunculkan lagi", async ({ page }) => {
@@ -268,33 +349,6 @@ test("proses yang sudah kedaluwarsa tidak dimunculkan lagi", async ({ page }) =>
 
   await expect.poll(() => page.evaluate(() => localStorage.getItem("linkdrop-active-job"))).toBeNull();
   await expect(page.getByRole("progressbar")).toBeHidden();
-});
-
-test("dialog simpan dan informasi batas tetap muat untuk nama file yang sangat panjang", async ({ page }) => {
-  const longName = `${"file_media_sangat_panjang_".repeat(12)}.mp4`;
-  await page.route("**/api/info", route => route.fulfill({
-    status: 200,
-    contentType: "application/json",
-    body: JSON.stringify({ ...mediaPayload, title: "judul_media_sangat_panjang_tanpa_spasi_untuk_menguji_lebar_layar_mobile" })
-  }));
-  await mockJob(page, { statuses: [readyJob(longName, 1)] });
-
-  await page.getByLabel("Tempel link media").fill("https://example.com/video");
-  await page.getByRole("button", { name: "Lihat pilihan" }).click();
-  await page.getByRole("link", { name: /720p/ }).click();
-
-  const dialog = page.getByRole("dialog", { name: "File siap disimpan" });
-  await expect(dialog).toBeVisible();
-  const fitsViewport = await dialog.evaluate(element => {
-    const box = element.getBoundingClientRect();
-    return box.left >= 0 && box.right <= window.innerWidth;
-  });
-  expect(fitsViewport).toBe(true);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-
-  const maxFile = page.locator("#singlePanel .helper > span:last-child");
-  const maxFileFits = await maxFile.evaluate(element => element.getBoundingClientRect().right <= window.innerWidth);
-  expect(maxFileFits).toBe(true);
 });
 
 test("kontrol mode, clipboard, format, dan pilihan batch memperbarui antarmuka", async ({ page }) => {
@@ -433,7 +487,7 @@ test("menu beberapa link hanya mengunduh media yang dipilih", async ({ page }) =
   await page.getByRole("button", { name: "Unduh sebagai ZIP" }).click();
 
   await expect(page.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "100");
-  await expect(page.getByRole("dialog", { name: "File siap disimpan" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Paket siap" })).toBeVisible();
   expect(batchTokens).toEqual(["mock-token"]);
 });
 
