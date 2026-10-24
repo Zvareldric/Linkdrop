@@ -1345,6 +1345,7 @@
         subtitle: "Subtitle", noSubtitle: "Tanpa subtitle", subtitle_id: "Indonesia", subtitle_en: "Inggris", autoCaption: "{language} (otomatis)",
         subtitleMode: "Cara tampil", subtitleSoft: "Bisa dinyalakan · kualitas asli", subtitleBurn: "Permanen · lebih lama",
         subtitleChooseHint: "Pilih bahasa jika ingin menyertakan subtitle.",
+        subtitleBurnUnavailable: "Subtitle permanen tidak tersedia di server ini karena FFmpeg-nya dibuat tanpa libass.",
         subtitleSoftHint: "Video tidak dikonversi ulang, jadi kualitasnya sama persis dengan aslinya dan prosesnya cepat. Subtitle muncul sebagai pilihan CC di VLC, iPhone, Mac, dan sebagian besar pemutar; beberapa galeri Android tidak menampilkannya.",
         subtitleBurnHint: "Subtitle digambar langsung ke video sehingga selalu tampil di pemutar mana pun. Video dikonversi ulang, jadi prosesnya lebih lama dan kualitasnya sedikit turun.",
         withSubtitle: "{label} + subtitle {language}", withBurnedSubtitle: "{label} + subtitle {language} permanen"
@@ -1377,6 +1378,7 @@
         subtitle: "Subtitles", noSubtitle: "No subtitles", subtitle_id: "Indonesian", subtitle_en: "English", autoCaption: "{language} (auto-generated)",
         subtitleMode: "Display", subtitleSoft: "Toggleable · original quality", subtitleBurn: "Burned in · slower",
         subtitleChooseHint: "Choose a language to include subtitles.",
+        subtitleBurnUnavailable: "Burned-in subtitles are not available on this server because its FFmpeg was built without libass.",
         subtitleSoftHint: "The video is not re-encoded, so it keeps exactly the original quality and finishes quickly. Subtitles appear as a CC option in VLC, iPhone, Mac, and most players; some Android galleries do not show them.",
         subtitleBurnHint: "Subtitles are drawn into the picture, so they always show in any player. The video is re-encoded, which takes longer and slightly lowers quality.",
         withSubtitle: "{label} + {language} subtitles", withBurnedSubtitle: "{label} + burned-in {language} subtitles"
@@ -1861,9 +1863,12 @@
 
       const modeGroup = document.getElementById("subtitleModeGroup");
       const modeOptions = document.getElementById("subtitleModeOptions");
+      // Older servers do not report the flag; treat a missing value as supported.
+      const burnAvailable = mediaData?.subtitle_burn !== false;
+      if (!burnAvailable) subtitleMode = "soft";
       modeGroup.hidden = !selectedSubtitle;
       modeOptions.replaceChildren();
-      [["soft", "subtitleSoft"], ["burn", "subtitleBurn"]].forEach(([mode, labelKey]) => {
+      [["soft", "subtitleSoft"], ["burn", "subtitleBurn"]].filter(([mode]) => mode === "soft" || burnAvailable).forEach(([mode, labelKey]) => {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "subtitle-option";
@@ -1875,9 +1880,10 @@
         });
         modeOptions.appendChild(button);
       });
-      document.getElementById("subtitleHint").textContent = !selectedSubtitle
+      const hint = !selectedSubtitle
         ? t("subtitleChooseHint")
         : t(subtitleMode === "burn" ? "subtitleBurnHint" : "subtitleSoftHint");
+      document.getElementById("subtitleHint").textContent = burnAvailable ? hint : `${hint} ${t("subtitleBurnUnavailable")}`;
     }
 
     function renderResult(data) {

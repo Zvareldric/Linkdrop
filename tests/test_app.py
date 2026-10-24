@@ -1226,5 +1226,77 @@ class ShellScriptTests(unittest.TestCase):
                 script.read_bytes().decode("ascii")
 
 
+class SubtitleBurnCapabilityTests(unittest.TestCase):
+    url = "https://www.youtube.com/watch?v=abc123"
+
+    def setUp(self):
+        media_app.app.config.update(TESTING=True)
+        media_app._rate_limiter.reset()
+        media_app._ffmpeg_filters.cache_clear()
+        self.addCleanup(media_app._ffmpeg_filters.cache_clear)
+        self.client = media_app.app.test_client()
+
+    def fake_ffmpeg(self, folder, with_libass):
+        filters = " ... scale             V->V       Scale the input video size.\n"
+        if with_libass:
+            filters += " ... subtitles         V->V       Render text subtitles onto input video using the libass library.\n"
+        script = Path(folder) / "ffmpeg"
+        script.write_text(
+            "#!/bin/sh\n"
+            "case \"$*\" in *-filters*) printf '%s' \"$FAKE_FILTERS\"; exit 0 ;; esac\n"
+            "echo \"No such filter: 'subtitles'\" >&2; exit 8\n"
+        )
+        script.chmod(0o755)
+        return patch.dict(os.environ, {"PATH": f"{folder}:{os.environ['PATH']}", "FAKE_FILTERS": filters})
+
+    def test_detects_ffmpeg_without_libass(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with self.fake_ffmpeg(folder, with_libass=False):
+                self.assertFalse(media_app._subtitle_burn_supported())
+            media_app._ffmpeg_filters.cache_clear()
+            with self.fake_ffmpeg(folder, with_libass=True):
+                self.assertTrue(media_app._subtitle_burn_supported())
+
+    def test_missing_ffmpeg_means_no_burning(self):
+        with patch.object(media_app.shutil, "which", return_value=None):
+            self.assertFalse(media_app._subtitle_burn_supported())
+
+    def test_health_and_info_report_burn_support(self):
+        with patch.object(media_app, "_subtitle_burn_supported", return_value=False):
+            self.assertFalse(self.client.get("/api/health").get_json()["subtitle_burn"])
+            payload = media_app._media_payload(self.url, SUBTITLE_INFO)
+        self.assertFalse(payload["subtitle_burn"])
+
+    @patch("app._validate_public_url", side_effect=lambda value: value)
+    @patch("app._download_with_retry")
+    def test_burn_request_fails_before_downloading_when_unsupported(self, download_mock, _validate):
+        video_token = media_app._make_token(self.url, "video", height=720)
+        subtitle_token = media_app._make_token(self.url, "subtitle", lang="en", automatic=False)
+        with patch.object(media_app, "_subtitle_burn_supported", return_value=False):
+            response = self.client.get(f"/api/download/{video_token}?subtitle={subtitle_token}&subtitle_mode=burn")
+            soft = self.client.get(f"/api/download/{video_token}?subtitle={subtitle_token}")
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.get_json()["error"], media_app.SUBTITLE_BURN_UNAVAILABLE)
+        self.assertEqual(download_mock.call_count, 1)
+        self.assertFalse(download_mock.call_args.args[0]["subtitle"]["burn"])
+        soft.close()
+
+    @unittest.skipUnless(shutil.which("ffprobe"), "ffprobe is required")
+    def test_failed_burn_explains_missing_libass_and_logs_ffmpeg_error(self):
+        with tempfile.TemporaryDirectory() as folder, tempfile.TemporaryDirectory() as tools:
+            folder = Path(folder)
+            video = folder / "video.mp4"
+            video.write_bytes(b"not really a video")
+            (folder / "linkdrop-subtitle.srt").write_text("1\n00:00:00,000 --> 00:00:01,000\nHalo\n")
+            probe = '{"streams": [{"codec_type": "video", "codec_name": "h264"}], "format": {"duration": "1"}}'
+            fake_probe = SimpleNamespace(stdout=probe)
+            with self.fake_ffmpeg(tools, with_libass=False), \
+                    patch.object(media_app.subprocess, "run", return_value=fake_probe), \
+                    self.assertLogs(media_app.app.logger, "WARNING") as logs:
+                with self.assertRaisesRegex(media_app.UserFacingError, "libass"):
+                    media_app._ensure_compatible_mp4(video, None, None, folder / "linkdrop-subtitle.srt")
+        self.assertIn("No such filter", "\n".join(logs.output))
+
+
 if __name__ == "__main__":
     unittest.main()
