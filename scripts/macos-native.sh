@@ -174,13 +174,13 @@ cmd_install() {
         git -C "$APP_DIR" fetch --quiet origin "$BRANCH"
         git -C "$APP_DIR" reset --quiet --hard "origin/$BRANCH"
     else
-        log "Mengunduh Linkdrop ke $APP_DIR…"
+        log "Mengunduh Linkdrop ke $APP_DIR..."
         git clone --quiet --branch "$BRANCH" "$REPO_URL" "$APP_DIR"
     fi
     if [ ! -x "$VENV_DIR/bin/python" ]; then
         "$python" -m venv "$VENV_DIR"
     fi
-    log "Memasang dependensi Python…"
+    log "Memasang dependensi Python..."
     pip_install --upgrade pip
     pip_install --upgrade -r "$APP_DIR/requirements.txt"
     date +%s > "$YTDLP_STAMP"
@@ -228,7 +228,7 @@ refresh_ytdlp() {
     echo "$now" > "$YTDLP_STAMP"
     after="$("$VENV_DIR/bin/python" -m pip show yt-dlp 2>/dev/null | sed -n 's/^Version: //p')"
     [ "$before" != "$after" ] || return 0
-    log "yt-dlp diperbarui dari $before ke $after; menjalankan ulang Linkdrop…"
+    log "yt-dlp diperbarui dari $before ke $after; menjalankan ulang Linkdrop..."
     restart_server
     if wait_healthy; then
         log "Linkdrop berjalan dengan yt-dlp $after."
@@ -262,7 +262,7 @@ cmd_update() {
 
     if [ "$old" = "$new" ]; then
         if [ -z "$(running_version)" ]; then
-            log "Linkdrop tidak merespons; menjalankan ulang…"
+            log "Linkdrop tidak merespons; menjalankan ulang..."
             restart_server
             wait_healthy || log "Linkdrop masih tidak merespons. Periksa $LOG_DIR/server.log"
         fi
@@ -276,7 +276,7 @@ cmd_update() {
         return 0
     fi
 
-    log "Memperbarui Linkdrop $(printf '%s' "$old" | cut -c1-7) → $(printf '%s' "$new" | cut -c1-7)…"
+    log "Memperbarui Linkdrop $(printf '%s' "$old" | cut -c1-7) -> $(printf '%s' "$new" | cut -c1-7)..."
     git -C "$APP_DIR" reset --quiet --hard "$new"
     if pip_install -r "$APP_DIR/requirements.txt" && restart_server && wait_healthy "$new"; then
         rm -f "$FAILED_FILE"
