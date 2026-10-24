@@ -79,6 +79,11 @@ class AppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.get_json()["ok"])
 
+    def test_health_reports_running_version(self):
+        self.assertEqual(self.client.get("/api/health").get_json()["version"], "dev")
+        with patch.dict(media_app.os.environ, {"LINKDROP_VERSION": "a71a35f"}):
+            self.assertEqual(self.client.get("/api/health").get_json()["version"], "a71a35f")
+
     @patch("app.secrets.token_urlsafe", return_value="generated-local-secret")
     def test_token_secret_is_random_when_not_configured(self, token_urlsafe_mock):
         secret = media_app._token_secret_for_runtime("", False)

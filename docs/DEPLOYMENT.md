@@ -35,6 +35,8 @@ docker run --detach \
 
 Place Caddy, nginx, Traefik, or the proxy provided by Dokku/Coolify in front of the local port. Terminate HTTPS at the proxy and allow long-lived streaming responses.
 
+To keep a Docker installation current without rebuilding by hand, use the published image and the [automatic update scripts](AUTO_UPDATE.md).
+
 ## Dokku
 
 Dokku can deploy the root `Dockerfile` directly:

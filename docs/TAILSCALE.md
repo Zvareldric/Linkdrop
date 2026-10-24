@@ -98,6 +98,8 @@ PORT=5050 gunicorn --bind 127.0.0.1:5050 --workers 1 --threads 4 --timeout 0 app
 
 Also confirm that the Tailscale application is connected. Prevent the host from sleeping during long downloads or video transcoding.
 
+To have Linkdrop start on its own after a restart and update whenever this repository changes, run it in Docker with [automatic updates](AUTO_UPDATE.md). The port stays `5050`, so the `tailscale serve` configuration does not change.
+
 ## Stop private access
 
 Stop the Linkdrop process with `Ctrl+C`. To remove the Tailscale Serve configuration as well, run:
