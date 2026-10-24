@@ -44,14 +44,43 @@ const richMediaPayload = {
   }
 };
 
-function frame(type, payload = Buffer.alloc(0)) {
-  const body = Buffer.isBuffer(payload)
-    ? payload
-    : Buffer.from(JSON.stringify(payload), "utf8");
-  const header = Buffer.alloc(5);
-  header.write(type, 0, 1, "ascii");
-  header.writeUInt32BE(body.length, 1);
-  return Buffer.concat([header, body]);
+function readyJob(filename, size = 11) {
+  return { state: "ready", percent: 100, phase: "Selesai", detail: "", filename, size, file_url: "/api/jobs/job-1/file" };
+}
+
+// Mocks the background job API: start → status polling → file download.
+// A status of "offline" makes that poll fail like a phone without network.
+async function mockJob(page, { start = "**/api/download/mock**", statuses, onStart, onCancel }) {
+  const queue = [...statuses];
+  await page.route(start, async route => {
+    if (route.request().method() !== "POST") return route.fallback();
+    onStart?.(route.request());
+    await route.fulfill({
+      status: 202,
+      contentType: "application/json",
+      body: JSON.stringify({ job: "job-1", state: "running", percent: 0, phase: "Memulai unduhan", detail: "" })
+    });
+  });
+  await page.route("**/api/jobs/job-1", async route => {
+    if (route.request().method() === "DELETE") {
+      onCancel?.();
+      return route.fulfill({ status: 204, body: "" });
+    }
+    const next = queue.length > 1 ? queue.shift() : queue[0];
+    if (next === "offline") return route.abort("internetdisconnected");
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(next) });
+  });
+  await page.route("**/api/jobs/job-1/file**", route => {
+    const name = new URL(route.request().url()).searchParams.get("name") || "download";
+    return route.fulfill({
+      status: 200,
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(name)}`
+      },
+      body: "media-bytes"
+    });
+  });
 }
 
 test.beforeEach(async ({ page }) => {
@@ -149,24 +178,16 @@ test("alur analisis berakhir pada tombol simpan yang dapat mengunduh file", asyn
     body: JSON.stringify(mediaPayload)
   }));
 
-  const fileBytes = Buffer.from("media-bytes", "utf8");
-  const responseBody = Buffer.concat([
-    frame("P", { percent: 48, phase: "Mengunduh media", detail: "2.4 MB/s" }),
-    frame("M", { filename: "contoh.mp4", content_type: "video/mp4", size: fileBytes.length }),
-    frame("D", fileBytes),
-    frame("C", { ok: true })
-  ]);
-  await page.route("**/api/download/mock?progress=1", route => route.fulfill({
-    status: 200,
-    contentType: "application/vnd.linkdrop.progress",
-    body: responseBody
-  }));
+  await mockJob(page, {
+    statuses: [{ state: "running", percent: 48, phase: "Mengunduh media", detail: "2.4 MB/s" }, readyJob("contoh.mp4")]
+  });
 
   await page.getByLabel("Tempel link media").fill("https://example.com/video");
   await page.getByRole("button", { name: "Lihat pilihan" }).click();
   await expect(page.getByText("Contoh media untuk pengujian")).toBeVisible();
 
   await page.getByRole("link", { name: /720p/ }).click();
+  await expect(page.getByText("Boleh pindah aplikasi atau mematikan layar", { exact: false })).toBeVisible();
 
   await expect(page.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "100");
   await expect(page.getByRole("progressbar").getByText("File siap disimpan", { exact: true })).toBeVisible();
@@ -191,6 +212,62 @@ test("alur analisis berakhir pada tombol simpan yang dapat mengunduh file", asyn
   const download = await downloadPromise;
 
   expect(download.suggestedFilename()).toBe("hasil-pengujian.mp4");
+  await expect(page.getByText("File diunduh oleh browser", { exact: false })).toBeVisible();
+});
+
+test("unduhan tetap berlanjut setelah koneksi putus saat layar mati", async ({ page }) => {
+  await page.route("**/api/info", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(mediaPayload)
+  }));
+  await mockJob(page, {
+    statuses: [
+      { state: "running", percent: 30, phase: "Mengunduh media", detail: "1 MB/s" },
+      "offline",
+      "offline",
+      readyJob("contoh.mp4")
+    ]
+  });
+
+  await page.getByLabel("Tempel link media").fill("https://example.com/video");
+  await page.getByRole("button", { name: "Lihat pilihan" }).click();
+  await page.getByRole("link", { name: /720p/ }).click();
+
+  await expect(page.getByText("Menunggu koneksi ke server", { exact: false })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "File siap disimpan" })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText("Unduhan gagal", { exact: true })).toBeHidden();
+});
+
+test("proses yang berjalan dilanjutkan setelah halaman dimuat ulang", async ({ page }) => {
+  await mockJob(page, {
+    statuses: [{ state: "running", percent: 64, phase: "Mengonversi video", detail: "64%" }, readyJob("lanjutan.mp4")]
+  });
+  await page.evaluate(() => localStorage.setItem("linkdrop-active-job", JSON.stringify({ id: "job-1", label: "720p" })));
+  await page.reload();
+
+  await expect(page.getByRole("progressbar").getByText("Mengonversi video", { exact: true })).toBeVisible();
+  const dialog = page.getByRole("dialog", { name: "File siap disimpan" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByLabel("Nama file")).toHaveValue("lanjutan.mp4");
+
+  const downloadPromise = page.waitForEvent("download");
+  await dialog.getByRole("button", { name: "Simpan sekarang", exact: true }).click();
+  expect((await downloadPromise).suggestedFilename()).toBe("lanjutan.mp4");
+  expect(await page.evaluate(() => localStorage.getItem("linkdrop-active-job"))).toBeNull();
+});
+
+test("proses yang sudah kedaluwarsa tidak dimunculkan lagi", async ({ page }) => {
+  await page.route("**/api/jobs/old-job", route => route.fulfill({
+    status: 404,
+    contentType: "application/json",
+    body: JSON.stringify({ error: "Proses unduhan tidak ditemukan." })
+  }));
+  await page.evaluate(() => localStorage.setItem("linkdrop-active-job", JSON.stringify({ id: "old-job", label: "720p" })));
+  await page.reload();
+
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("linkdrop-active-job"))).toBeNull();
+  await expect(page.getByRole("progressbar")).toBeHidden();
 });
 
 test("dialog simpan dan informasi batas tetap muat untuk nama file yang sangat panjang", async ({ page }) => {
@@ -200,15 +277,7 @@ test("dialog simpan dan informasi batas tetap muat untuk nama file yang sangat p
     contentType: "application/json",
     body: JSON.stringify({ ...mediaPayload, title: "judul_media_sangat_panjang_tanpa_spasi_untuk_menguji_lebar_layar_mobile" })
   }));
-  await page.route("**/api/download/mock?progress=1", route => route.fulfill({
-    status: 200,
-    contentType: "application/vnd.linkdrop.progress",
-    body: Buffer.concat([
-      frame("M", { filename: longName, content_type: "video/mp4", size: 1 }),
-      frame("D", Buffer.from("x")),
-      frame("C", { ok: true })
-    ])
-  }));
+  await mockJob(page, { statuses: [readyJob(longName, 1)] });
 
   await page.getByLabel("Tempel link media").fill("https://example.com/video");
   await page.getByRole("button", { name: "Lihat pilihan" }).click();
@@ -296,25 +365,37 @@ test("tombol batalkan menghentikan unduhan yang masih berjalan", async ({ page }
     contentType: "application/json",
     body: JSON.stringify(mediaPayload)
   }));
-  await page.evaluate(() => {
-    const originalFetch = window.fetch.bind(window);
-    window.fetch = (url, options = {}) => {
-      if (!String(url).includes("/api/download/mock")) return originalFetch(url, options);
-      return new Promise((resolve, reject) => {
-        options.signal?.addEventListener("abort", () => {
-          reject(new DOMException("Aborted", "AbortError"));
-        });
-      });
-    };
+  let cancelled = false;
+  await mockJob(page, {
+    statuses: [{ state: "running", percent: 20, phase: "Mengunduh media", detail: "1 MB/s" }],
+    onCancel: () => { cancelled = true; }
   });
 
   await page.getByLabel("Tempel link media").fill("https://example.com/video");
   await page.getByRole("button", { name: "Lihat pilihan" }).click();
   await page.getByRole("link", { name: /720p/ }).click();
-  await expect(page.getByRole("button", { name: "Batalkan" })).toBeVisible();
+  await expect(page.getByRole("progressbar").getByText("Mengunduh media", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Batalkan" }).click();
   await expect(page.getByRole("progressbar").getByText("Unduhan gagal", { exact: true })).toBeVisible();
   await expect(page.getByText("Unduhan dibatalkan.", { exact: true })).toBeVisible();
+  await expect.poll(() => cancelled).toBe(true);
+  expect(await page.evaluate(() => localStorage.getItem("linkdrop-active-job"))).toBeNull();
+});
+
+test("tombol batalkan juga bekerja sebelum server membalas", async ({ page }) => {
+  await page.route("**/api/info", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(mediaPayload)
+  }));
+  await page.route("**/api/download/mock**", () => {});
+
+  await page.getByLabel("Tempel link media").fill("https://example.com/video");
+  await page.getByRole("button", { name: "Lihat pilihan" }).click();
+  await page.getByRole("link", { name: /720p/ }).click();
+  await page.getByRole("button", { name: "Batalkan" }).click();
+  await expect(page.getByText("Unduhan dibatalkan.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Lihat pilihan" })).toBeEnabled();
 });
 
 test("menu beberapa link hanya mengunduh media yang dipilih", async ({ page }) => {
@@ -327,20 +408,11 @@ test("menu beberapa link hanya mengunduh media yang dipilih", async ({ page }) =
     });
   });
 
-  const archiveBytes = Buffer.from("zip-bytes", "utf8");
-  const responseBody = Buffer.concat([
-    frame("P", { percent: 50, phase: "Mengunduh media · 1/1", detail: "1 MB/s" }),
-    frame("M", { filename: "linkdrop-part-1.zip", content_type: "application/zip", size: archiveBytes.length }),
-    frame("D", archiveBytes),
-    frame("C", { ok: true })
-  ]);
-  await page.route("**/api/batch/download?progress=1", async route => {
-    expect(route.request().postDataJSON().tokens).toEqual(["mock-token"]);
-    await route.fulfill({
-      status: 200,
-      contentType: "application/vnd.linkdrop.progress",
-      body: responseBody
-    });
+  let batchTokens = null;
+  await mockJob(page, {
+    start: "**/api/batch/download?job=1",
+    statuses: [{ state: "running", percent: 50, phase: "Mengunduh media · 1/1", detail: "1 MB/s" }, readyJob("linkdrop-part-1.zip")],
+    onStart: request => { batchTokens = request.postDataJSON().tokens; }
   });
 
   await page.getByRole("tab", { name: "Beberapa link" }).click();
@@ -362,6 +434,7 @@ test("menu beberapa link hanya mengunduh media yang dipilih", async ({ page }) =
 
   await expect(page.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "100");
   await expect(page.getByRole("dialog", { name: "File siap disimpan" })).toBeVisible();
+  expect(batchTokens).toEqual(["mock-token"]);
 });
 
 test("antrean panjang menampilkan peringatan dan tombol antrean berikutnya berfungsi", async ({ page }) => {
@@ -397,19 +470,9 @@ test("subtitle hanya bisa dipilih jika video memilikinya dan ikut dikirim ke und
     body: JSON.stringify(subtitlePayload)
   }));
   let requestedUrl = null;
-  await page.route("**/api/download/mock?**", route => {
-    requestedUrl = route.request().url();
-    const fileBytes = Buffer.from("video-with-subtitle", "utf8");
-    return route.fulfill({
-      status: 200,
-      contentType: "application/vnd.linkdrop.progress",
-      body: Buffer.concat([
-        frame("P", { percent: 92, phase: "Menempelkan subtitle ke video", detail: "50%" }),
-        frame("M", { filename: "contoh.mp4", content_type: "video/mp4", size: fileBytes.length }),
-        frame("D", fileBytes),
-        frame("C", { ok: true })
-      ])
-    });
+  await mockJob(page, {
+    statuses: [{ state: "running", percent: 92, phase: "Menempelkan subtitle ke video", detail: "50%" }, readyJob("contoh.mp4")],
+    onStart: request => { requestedUrl = request.url(); }
   });
 
   await page.getByLabel("Tempel link media").fill("https://www.youtube.com/watch?v=abc123");
@@ -439,7 +502,6 @@ test("subtitle hanya bisa dipilih jika video memilikinya dan ikut dikirim ke und
   await expect(page.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "100");
   const params = new URL(requestedUrl).searchParams;
   expect(params.get("subtitle")).toBe("sub-en");
-  expect(params.get("progress")).toBe("1");
 });
 
 test("pemilih subtitle tersembunyi jika video tidak memiliki subtitle", async ({ page }) => {

@@ -84,6 +84,8 @@ Set these variables before Linkdrop is reachable by people you do not fully trus
 | `RATE_LIMIT_DOWNLOAD` | `20/600` | Single and batch downloads per client address, as `count/seconds`, or `off`. |
 | `TRUSTED_PROXY_HEADER` | empty | Header that carries the client address from a trusted proxy, such as `CF-Connecting-IP` behind Cloudflare. Set it only when the proxy is the sole way to reach Linkdrop. |
 | `FFMPEG_TIMEOUT` | `3600` | Seconds before a compatibility conversion is stopped. |
+| `JOB_RESULT_TTL` | `3600` | Seconds a finished file stays on the server so the browser can save or resume it. |
+| `MAX_ACTIVE_JOBS` | `4` | Downloads processed at the same time. Further requests are refused until one finishes. |
 | `GALLERY_CONCURRENCY` | `4` | Carousel items downloaded at the same time. Items are copied as-is, so this mainly uses network bandwidth. |
 | `BATCH_CONCURRENCY` | `2` | Links in a multi-link package processed at the same time. Raise it only with spare CPU and temporary disk, because each item may need a conversion. |
 

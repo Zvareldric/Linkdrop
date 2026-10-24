@@ -142,7 +142,7 @@ The client is usually not connected to Tailscale, is signed in to another tailne
 
 ### The page opens but downloads stop
 
-Keep the browser page open and prevent the host from sleeping. High-resolution VP9 or AV1 sources may require an additional H.264 compatibility conversion, so progress can remain in the processing stage for a while.
+The phone can lock its screen or switch apps: processing continues on the host, and the page catches up when it is opened again. The host itself must stay awake and connected. High-resolution VP9 or AV1 sources may require an additional H.264 compatibility conversion, so progress can remain in the processing stage for a while. A finished file stays available for one hour.
 
 ### The video downloads but an older file will not play
 
