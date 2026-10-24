@@ -52,7 +52,8 @@ Buka PowerShell lalu jalankan:
 git clone https://github.com/Zvareldric/Linkdrop.git
 Set-Location Linkdrop
 
-$secret = [Convert]::ToHexString((1..32 | ForEach-Object { Get-Random -Maximum 256 }))
+$bytes = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+$secret = -join ($bytes | ForEach-Object { $_.ToString("x2") })
 docker build -t linkdrop .
 docker run --detach --name linkdrop --restart unless-stopped `
   --publish 127.0.0.1:5050:8080 `
@@ -97,6 +98,7 @@ Buka [http://127.0.0.1:5000](http://127.0.0.1:5000). Pengguna Linux perlu memasa
 - [Instalasi](docs/INSTALLATION.id.md) — Windows/Docker Desktop terlebih dahulu, lalu macOS dan Linux.
 - [Akses privat dari ponsel](docs/TAILSCALE.id.md) — akses aman melalui Tailscale.
 - [Akses publik tanpa VPS](docs/CLOUDFLARE_TUNNEL.id.md) — publikasikan Linkdrop dari komputer sendiri dengan Cloudflare Tunnel dan kata sandi.
+- [Pembaruan otomatis](docs/AUTO_UPDATE.id.md) — Linkdrop di komputer Anda ikut ter-update setiap repository ini berubah.
 - [Deployment](docs/DEPLOYMENT.md) — hosting persisten dan batas operasional.
 - [Arsitektur](docs/ARCHITECTURE.md) — alur media, file sementara, dan model keamanan.
 

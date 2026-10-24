@@ -39,7 +39,8 @@ Open PowerShell and run:
 git clone https://github.com/Zvareldric/Linkdrop.git
 Set-Location Linkdrop
 
-$secret = [Convert]::ToHexString((1..32 | ForEach-Object { Get-Random -Maximum 256 }))
+$bytes = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+$secret = -join ($bytes | ForEach-Object { $_.ToString("x2") })
 docker build -t linkdrop .
 docker run --detach --name linkdrop --restart unless-stopped `
   --publish 127.0.0.1:5050:8080 `

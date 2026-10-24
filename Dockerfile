@@ -25,6 +25,9 @@ RUN useradd --create-home --uid 10001 linkdrop \
     && mkdir -p /app/downloads \
     && chown -R linkdrop:linkdrop /app
 
+ARG LINKDROP_VERSION=dev
+ENV LINKDROP_VERSION=${LINKDROP_VERSION}
+
 USER linkdrop
 
 EXPOSE 8080
