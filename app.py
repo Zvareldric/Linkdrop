@@ -891,8 +891,8 @@ def _subtitle_burn_supported() -> bool:
 
 
 SUBTITLE_BURN_UNAVAILABLE = (
-    "Subtitle permanen tidak tersedia di server ini karena FFmpeg-nya dibuat tanpa libass. "
-    "Pilih mode \u201cBisa dinyalakan\u201d."
+    "Pilihan \u201cSelalu tampil\u201d tidak tersedia di server ini karena FFmpeg-nya dibuat tanpa libass. "
+    "Pilih \u201cBisa dimatikan\u201d."
 )
 
 

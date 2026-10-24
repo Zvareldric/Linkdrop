@@ -1164,7 +1164,7 @@
             <span class="subtitle-title" id="subtitleTitle" data-i18n="subtitle">Subtitle</span>
             <div class="subtitle-options" id="subtitleOptions"></div>
             <div class="subtitle-mode" id="subtitleModeGroup" role="group" aria-labelledby="subtitleModeTitle" hidden>
-              <span class="subtitle-title" id="subtitleModeTitle" data-i18n="subtitleMode">Cara tampil</span>
+              <span class="subtitle-title" id="subtitleModeTitle" data-i18n="subtitleMode">Tampilan subtitle</span>
               <div class="subtitle-options" id="subtitleModeOptions"></div>
             </div>
             <small class="subtitle-hint" id="subtitleHint"></small>
@@ -1343,12 +1343,12 @@
         savePackageFirst: "Simpan paket yang sudah siap sebelum menyiapkan paket berikutnya.", packageLabel: "paket {number}", packageReady: "Paket siap disimpan", checking: "Memeriksa…", genericError: "Terjadi kesalahan. Silakan coba lagi.",
         detectedLinks: "{count} link terdeteksi. Periksa daftar lalu tekan “Analisis”.", clipboardDenied: "Browser tidak memberi izin membaca clipboard. Tempel link secara manual.",
         subtitle: "Subtitle", noSubtitle: "Tanpa subtitle", subtitle_id: "Indonesia", subtitle_en: "Inggris", autoCaption: "{language} (otomatis)",
-        subtitleMode: "Cara tampil", subtitleSoft: "Bisa dinyalakan · kualitas asli", subtitleBurn: "Permanen · lebih lama",
+        subtitleMode: "Tampilan subtitle", subtitleSoft: "Bisa dimatikan", subtitleBurn: "Selalu tampil",
         subtitleChooseHint: "Pilih bahasa jika ingin menyertakan subtitle.",
-        subtitleBurnUnavailable: "Subtitle permanen tidak tersedia di server ini karena FFmpeg-nya dibuat tanpa libass.",
-        subtitleSoftHint: "Video tidak dikonversi ulang, jadi kualitasnya sama persis dengan aslinya dan prosesnya cepat. Subtitle muncul sebagai pilihan CC di VLC, iPhone, Mac, dan sebagian besar pemutar; beberapa galeri Android tidak menampilkannya.",
-        subtitleBurnHint: "Subtitle digambar langsung ke video sehingga selalu tampil di pemutar mana pun. Video dikonversi ulang, jadi prosesnya lebih lama dan kualitasnya sedikit turun.",
-        withSubtitle: "{label} + subtitle {language}", withBurnedSubtitle: "{label} + subtitle {language} permanen"
+        subtitleBurnUnavailable: "Pilihan “Selalu tampil” tidak tersedia di server ini karena FFmpeg-nya dibuat tanpa libass.",
+        subtitleSoftHint: "Subtitle bisa dinyalakan atau dimatikan dari pemutar video. Kualitas video tetap asli dan prosesnya cepat. Sebagian galeri Android tidak menampilkannya; pilih “Selalu tampil” jika perlu.",
+        subtitleBurnHint: "Subtitle menyatu dengan gambar sehingga selalu terlihat di pemutar mana pun. Prosesnya lebih lama dan kualitas video sedikit turun.",
+        withSubtitle: "{label} + subtitle {language}", withBurnedSubtitle: "{label} + subtitle {language} (selalu tampil)"
       },
       en: {
         publicMedia: "Public media", languageChoice: "Language selection", kicker: "Download media in its real quality!",
@@ -1376,12 +1376,12 @@
         savePackageFirst: "Save the package that is ready before preparing the next one.", packageLabel: "package {number}", packageReady: "Package ready to save", checking: "Checking…", genericError: "Something went wrong. Please try again.",
         detectedLinks: "{count} links detected. Review the list, then press “Analyze”.", clipboardDenied: "The browser did not allow clipboard access. Paste the link manually.",
         subtitle: "Subtitles", noSubtitle: "No subtitles", subtitle_id: "Indonesian", subtitle_en: "English", autoCaption: "{language} (auto-generated)",
-        subtitleMode: "Display", subtitleSoft: "Toggleable · original quality", subtitleBurn: "Burned in · slower",
+        subtitleMode: "Subtitle display", subtitleSoft: "Can be turned off", subtitleBurn: "Always shown",
         subtitleChooseHint: "Choose a language to include subtitles.",
-        subtitleBurnUnavailable: "Burned-in subtitles are not available on this server because its FFmpeg was built without libass.",
-        subtitleSoftHint: "The video is not re-encoded, so it keeps exactly the original quality and finishes quickly. Subtitles appear as a CC option in VLC, iPhone, Mac, and most players; some Android galleries do not show them.",
-        subtitleBurnHint: "Subtitles are drawn into the picture, so they always show in any player. The video is re-encoded, which takes longer and slightly lowers quality.",
-        withSubtitle: "{label} + {language} subtitles", withBurnedSubtitle: "{label} + burned-in {language} subtitles"
+        subtitleBurnUnavailable: "“Always shown” is not available on this server because its FFmpeg was built without libass.",
+        subtitleSoftHint: "Subtitles can be turned on or off in the video player. The video keeps its original quality and is ready quickly. Some Android gallery apps do not show them; choose “Always shown” if needed.",
+        subtitleBurnHint: "Subtitles become part of the picture, so they are visible in every player. This takes longer and slightly lowers video quality.",
+        withSubtitle: "{label} + {language} subtitles", withBurnedSubtitle: "{label} + {language} subtitles (always shown)"
       }
     };
     let currentLanguage = "id";
