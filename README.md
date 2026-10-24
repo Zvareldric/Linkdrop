@@ -35,7 +35,7 @@ Linkdrop is a responsive web app for inspecting and downloading public media you
 
 - Shows the real formats and source resolutions available for a public link.
 - Downloads video, original audio or MP3, and original photos; multi-image posts become ZIP files.
-- Keeps the source streams untouched by default: original video (including WebM/MKV above 1080p), original audio, and original photos.
+- Delivers every video as MP4 and original audio as M4A, keeping the source streams untouched whenever they are already in those formats; photos are always original.
 - Adds Indonesian or English subtitles when the source provides them, either as a toggleable track with no re-encoding or burned into the picture.
 - Downloads carousel items and multi-link packages in parallel.
 - Streams download progress and lets users choose where to save the completed file.
