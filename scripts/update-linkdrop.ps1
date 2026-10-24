@@ -30,7 +30,8 @@ $KeepKeys = '^(DOWNLOAD_TOKEN_SECRET|DOWNLOAD_TOKEN_MAX_AGE|MAX_MEDIA_BYTES|HTTP
 
 function Write-Log([string]$Message) {
     $line = "{0} {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Message
-    Write-Output $line
+    # Write-Host, not Write-Output: output would become a function's return value.
+    Write-Host $line
     try { Add-Content -Path $LogFile -Value $line -Encoding UTF8 } catch { }
 }
 
@@ -62,6 +63,15 @@ function New-Secret {
     $generator.GetBytes($bytes)
     $generator.Dispose()
     return -join ($bytes | ForEach-Object { $_.ToString("x2") })
+}
+
+if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+    Write-Log "Perintah docker tidak ditemukan. Pasang Docker Desktop, buka aplikasinya sekali sampai selesai, lalu jalankan skrip ini lagi."
+    exit 1
+}
+if (-not (Invoke-Docker info).Ok) {
+    Write-Log "Docker belum berjalan. Buka Docker Desktop, tunggu sampai statusnya running, lalu jalankan skrip ini lagi."
+    exit 1
 }
 
 New-Item -ItemType Directory -Force -Path $ConfigDir | Out-Null
@@ -119,8 +129,17 @@ try {
     }
 
     function Start-Linkdrop([string]$ImageId) {
-        Invoke-Docker run --detach --name $Name --restart unless-stopped `
-            --publish "127.0.0.1:${Port}:8080" --env-file $EnvFile $ImageId | Out-Null
+        $result = Invoke-Docker run --detach --name $Name --restart unless-stopped `
+            --publish "127.0.0.1:${Port}:8080" --env-file $EnvFile $ImageId
+        if ($result.Ok) { return $true }
+        Invoke-Docker rm --force $Name | Out-Null
+        if ($result.Output -match "address already in use|port is already allocated|ports are not available|Only one usage of each socket address") {
+            Write-Log "Port $Port sudah dipakai program lain, misalnya Linkdrop lama yang berjalan dengan gunicorn."
+            Write-Log "Hentikan program itu dulu (cari dengan: Get-NetTCPConnection -LocalPort $Port -State Listen), lalu jalankan skrip ini lagi."
+        } else {
+            Write-Log "Container gagal dibuat: $($result.Output)"
+        }
+        return $false
     }
 
     function Get-Health {
@@ -141,30 +160,31 @@ try {
 
     Write-Log "Memasang versi baru Linkdrop..."
     Invoke-Docker rm --force $Name | Out-Null
-    Start-Linkdrop $latest
-
-    $health = Wait-Healthy
-    if ($health) {
-        $version = if ($health.version) { $health.version } else { "baru" }
-        Write-Log "Linkdrop diperbarui ke versi $version di http://127.0.0.1:$Port."
-        Remove-Item $FailedFile -Force -ErrorAction SilentlyContinue
-        # Remove the replaced image only when nothing names it any more (an old
-        # pull); an image the user built and tagged themselves is kept.
-        if ($current -and $current -ne $latest -and (Invoke-Docker image inspect --format '{{len .RepoTags}}' $current).Output -eq "0") {
-            Invoke-Docker image rm $current | Out-Null
+    if (Start-Linkdrop $latest) {
+        $health = Wait-Healthy
+        if ($health) {
+            $version = if ($health.version) { $health.version } else { "baru" }
+            Write-Log "Linkdrop diperbarui ke versi $version di http://127.0.0.1:$Port."
+            Remove-Item $FailedFile -Force -ErrorAction SilentlyContinue
+            # Remove the replaced image only when nothing names it any more (an old
+            # pull); an image the user built and tagged themselves is kept.
+            if ($current -and $current -ne $latest -and (Invoke-Docker image inspect --format '{{len .RepoTags}}' $current).Output -eq "0") {
+                Invoke-Docker image rm $current | Out-Null
+            }
+            exit 0
         }
-        exit 0
+        # Only an image that started but never answered is remembered as broken;
+        # a busy port is not the image's fault.
+        Write-Log ("Versi baru tidak merespons. Log terakhir:`n" + (Invoke-Docker logs --tail 5 $Name).Output)
+        Set-Content -Path $FailedFile -Value $latest
+        Invoke-Docker rm --force $Name | Out-Null
     }
 
-    Write-Log ("Versi baru tidak merespons. Log terakhir:`n" + (Invoke-Docker logs --tail 5 $Name).Output)
-    Set-Content -Path $FailedFile -Value $latest
-    Invoke-Docker rm --force $Name | Out-Null
     if ($current) {
-        Start-Linkdrop $current
-        if (Wait-Healthy) {
+        if ((Start-Linkdrop $current) -and (Wait-Healthy)) {
             Write-Log "Versi sebelumnya dijalankan kembali."
         } else {
-            Write-Log "Versi sebelumnya juga tidak merespons. Periksa: docker logs $Name"
+            Write-Log "Versi sebelumnya juga tidak dapat dijalankan. Periksa: docker logs $Name"
         }
     }
     exit 1
