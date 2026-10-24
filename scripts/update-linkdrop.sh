@@ -124,7 +124,7 @@ healthy() {
     return 1
 }
 
-log "Memasang versi baru Linkdrop…"
+log "Memasang versi baru Linkdrop..."
 docker rm --force "$NAME" >/dev/null 2>&1 || true
 if start_container "$latest"; then
     if healthy; then

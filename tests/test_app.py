@@ -1217,5 +1217,14 @@ class ParallelDownloadTests(unittest.TestCase):
         self.assertLess(elapsed, 0.3 * 4 * 0.8)
 
 
+class ShellScriptTests(unittest.TestCase):
+    def test_shell_scripts_are_ascii(self):
+        # bash 3.2 on macOS reads a non-ASCII byte right after "$NAME" as part
+        # of the variable name ("APP_DIR?: unbound variable").
+        for script in sorted((Path(__file__).resolve().parent.parent / "scripts").glob("*.sh")):
+            with self.subTest(script=script.name):
+                script.read_bytes().decode("ascii")
+
+
 if __name__ == "__main__":
     unittest.main()
