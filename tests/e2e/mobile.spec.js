@@ -472,3 +472,23 @@ test("mode subtitle permanen dikirim sebagai pilihan terpisah", async ({ page })
   await expect(burnLink).toHaveAttribute("href", "/api/download/mock?subtitle=sub-id&subtitle_mode=burn");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
+
+test("mode permanen disembunyikan jika server tidak bisa membakar subtitle", async ({ page }) => {
+  await page.route("**/api/info", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      ...mediaPayload,
+      subtitle_burn: false,
+      subtitles: [{ id: "subtitle:en", language: "en", automatic: false, token: "sub-en" }]
+    })
+  }));
+  await page.getByLabel("Tempel link media").fill("https://www.youtube.com/watch?v=abc123");
+  await page.getByRole("button", { name: "Lihat pilihan" }).click();
+  await page.getByRole("group", { name: "Subtitle" }).getByRole("button", { name: "Inggris" }).click();
+
+  const modeGroup = page.getByRole("group", { name: "Cara tampil" });
+  await expect(modeGroup.getByRole("button")).toHaveText(["Bisa dinyalakan · kualitas asli"]);
+  await expect(page.getByText("FFmpeg-nya dibuat tanpa libass")).toBeVisible();
+  await expect(page.getByRole("link", { name: /720p \+ subtitle Inggris MP4/ })).toHaveAttribute("href", "/api/download/mock?subtitle=sub-en");
+});

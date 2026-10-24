@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import functools
 import hmac
 import ipaddress
 import json
@@ -846,6 +847,7 @@ def _media_payload(url: str, info: dict) -> dict:
         "item_count": len(entries),
         "choices": choices,
         "subtitles": _subtitle_choices(url, info) if choices["video"] else [],
+        "subtitle_burn": _subtitle_burn_supported(),
         "limits": {
             "max_file_mb": MAX_MEDIA_BYTES // (1024 * 1024),
             "token_minutes": TOKEN_MAX_AGE // 60,
@@ -876,6 +878,46 @@ def _mp4_streams_are_compatible(streams: list[dict]) -> bool:
     )
     audio_compatible = not audio_streams or audio_streams[0].get("codec_name") == "aac"
     return video_compatible and audio_compatible
+
+
+@functools.lru_cache(maxsize=4)
+def _ffmpeg_filters(ffmpeg: str) -> frozenset[str]:
+    result = subprocess.run([ffmpeg, "-hide_banner", "-filters"], capture_output=True, text=True, timeout=30)
+    names = set()
+    for line in result.stdout.splitlines():
+        parts = line.split()
+        if len(parts) >= 3 and "->" in parts[2]:
+            names.add(parts[1])
+    return frozenset(names)
+
+
+def _subtitle_burn_supported() -> bool:
+    """Whether FFmpeg can draw subtitles into video (needs libass).
+
+    Some builds, such as Homebrew's default ffmpeg formula, leave libass out;
+    on those only the selectable subtitle track is offered.
+    """
+
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        return False
+    try:
+        return "subtitles" in _ffmpeg_filters(ffmpeg)
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+SUBTITLE_BURN_UNAVAILABLE = (
+    "Subtitle permanen tidak tersedia di server ini karena FFmpeg-nya dibuat tanpa libass. "
+    "Pilih mode \u201cBisa dinyalakan\u201d."
+)
+
+
+def _ffmpeg_error_tail(exc: subprocess.CalledProcessError) -> str:
+    stderr = exc.stderr or b""
+    if isinstance(stderr, bytes):
+        stderr = stderr.decode("utf-8", "replace")
+    return " | ".join(line.strip() for line in stderr.strip().splitlines()[-5:])
 
 
 def _read_ffmpeg_progress(stream, on_progress) -> None:
@@ -1050,6 +1092,7 @@ def _embed_subtitle_track(
         _run_media_command(command, cancelled, cwd=path.parent)
     except subprocess.CalledProcessError as exc:
         output.unlink(missing_ok=True)
+        app.logger.warning("FFmpeg failed to add the subtitle track: %s", _ffmpeg_error_tail(exc))
         raise UserFacingError("Subtitle gagal ditambahkan ke video.") from exc
     except BaseException:
         output.unlink(missing_ok=True)
@@ -1143,7 +1186,10 @@ def _ensure_compatible_mp4(
         _run_media_command(command, cancelled, cwd=path.parent, on_progress=report_conversion)
     except subprocess.CalledProcessError as exc:
         converted.unlink(missing_ok=True)
+        app.logger.warning("FFmpeg conversion failed: %s", _ffmpeg_error_tail(exc))
         if subtitle:
+            if not _subtitle_burn_supported():
+                raise UserFacingError(SUBTITLE_BURN_UNAVAILABLE) from exc
             raise UserFacingError("Subtitle gagal ditempelkan ke video.") from exc
         raise UserFacingError("Video gagal dikonversi ke format MP4 yang kompatibel.") from exc
     except BaseException:
@@ -2008,6 +2054,7 @@ def health():
         "runtime": "vercel" if IS_VERCEL else "local",
         "ffmpeg": bool(shutil.which("ffmpeg")),
         "js_runtime": next(iter(js_runtimes), None),
+        "subtitle_burn": _subtitle_burn_supported(),
         "max_file_mb": MAX_MEDIA_BYTES // (1024 * 1024),
         "batch_limit_mb": _batch_storage_limit() // (1024 * 1024),
         "max_batch_items": MAX_BATCH_ITEMS,
@@ -2032,6 +2079,9 @@ def download(token: str):
         if subtitle_token := request.args.get("subtitle"):
             payload["subtitle"] = _decode_subtitle_token(subtitle_token, payload)
             payload["subtitle"]["burn"] = request.args.get("subtitle_mode") == "burn"
+            # Fail before downloading anything rather than at the last step.
+            if payload["subtitle"]["burn"] and not _subtitle_burn_supported():
+                raise UserFacingError(SUBTITLE_BURN_UNAVAILABLE)
     except SignatureExpired:
         return jsonify({"error": "Link unduhan kedaluwarsa. Analisis link kembali."}), 410
     except BadSignature:

@@ -17,7 +17,7 @@ Tidak ada ikon di Dock atau menu bar; Linkdrop berjalan diam-diam di latar belak
 - [Homebrew](https://brew.sh)
 - Clone repository ini, misalnya di `~/development/Linkdrop`
 
-Python 3.12, FFmpeg, dan Deno dipasang otomatis lewat Homebrew jika belum ada.
+Python 3.12, FFmpeg, dan Deno dipasang otomatis lewat Homebrew jika belum ada. Untuk FFmpeg, skrip memakai `ffmpeg-full` dari Homebrew, karena formula `ffmpeg` bawaan dibuat tanpa libass yang dibutuhkan subtitle permanen. `ffmpeg-full` tidak menggantikan `ffmpeg` yang sudah ada. Jika Anda memasang Linkdrop sebelum perubahan ini, jalankan `./scripts/macos-native.sh install` sekali lagi untuk menambahkannya.
 
 ## Memasang
 

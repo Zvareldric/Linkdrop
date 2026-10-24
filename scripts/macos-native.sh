@@ -15,7 +15,9 @@
 # Written for the bash 3.2 that ships with macOS.
 set -euo pipefail
 
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+# ffmpeg-full comes first: Homebrew's default ffmpeg is built without libass,
+# which burned-in subtitles need. It is keg-only, so it is not on PATH itself.
+export PATH="/opt/homebrew/opt/ffmpeg-full/bin:/usr/local/opt/ffmpeg-full/bin:/opt/homebrew/bin:/usr/local/bin:$PATH:/usr/bin:/bin:/usr/sbin:/sbin"
 
 REPO_URL="${LINKDROP_REPO:-https://github.com/Zvareldric/Linkdrop.git}"
 BRANCH="${LINKDROP_BRANCH:-main}"
@@ -76,10 +78,21 @@ find_python() {
     return 1
 }
 
+# Read the filter list into a variable first: "ffmpeg | grep -q" can report a
+# failure under pipefail when grep exits early and ffmpeg gets SIGPIPE.
+ffmpeg_can_burn() {
+    local filters
+    filters="$(ffmpeg -hide_banner -filters 2>/dev/null)" || return 1
+    case "$filters" in *" subtitles "*) return 0 ;; esac
+    return 1
+}
+
 install_dependencies() {
     local missing=""
     find_python >/dev/null || missing="$missing python@3.12"
-    command -v ffmpeg >/dev/null 2>&1 || missing="$missing ffmpeg"
+    if ! command -v ffmpeg >/dev/null 2>&1 || ! ffmpeg_can_burn; then
+        missing="$missing ffmpeg-full"
+    fi
     command -v deno >/dev/null 2>&1 || command -v node >/dev/null 2>&1 || missing="$missing deno"
     command -v git >/dev/null 2>&1 || missing="$missing git"
     if [ -z "$missing" ]; then
@@ -91,6 +104,8 @@ install_dependencies() {
     # Word splitting is intended: one package name per word.
     # shellcheck disable=SC2086
     brew install $missing
+    hash -r
+    ffmpeg_can_burn || log "Peringatan: FFmpeg masih tanpa libass; subtitle permanen tidak akan tersedia."
 }
 
 pip_install() {

@@ -17,7 +17,7 @@ There is no Dock or menu bar icon; Linkdrop runs quietly in the background.
 - [Homebrew](https://brew.sh)
 - A clone of this repository, for example in `~/development/Linkdrop`
 
-Python 3.12, FFmpeg, and Deno are installed through Homebrew when missing.
+Python 3.12, FFmpeg, and Deno are installed through Homebrew when missing. For FFmpeg the script uses Homebrew's `ffmpeg-full`, because the default `ffmpeg` formula is built without libass, which burned-in subtitles need. `ffmpeg-full` does not replace an existing `ffmpeg`. If you installed Linkdrop before this change, run `./scripts/macos-native.sh install` once more to add it.
 
 ## Install
 
