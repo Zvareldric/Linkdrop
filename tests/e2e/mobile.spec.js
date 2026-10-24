@@ -417,12 +417,12 @@ test("subtitle hanya bisa dipilih jika video memilikinya dan ikut dikirim ke und
   await expect(picker).toBeHidden();
   await page.getByRole("button", { name: "Video", exact: true }).click();
 
-  const modeGroup = page.getByRole("group", { name: "Cara tampil" });
+  const modeGroup = page.getByRole("group", { name: "Tampilan subtitle" });
   await expect(modeGroup).toBeHidden();
   await picker.getByRole("button", { name: "Inggris" }).click();
   await expect(picker.getByRole("button", { name: "Inggris" })).toHaveAttribute("aria-pressed", "true");
-  await expect(modeGroup.getByRole("button", { name: "Bisa dinyalakan · kualitas asli" })).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByText("kualitasnya sama persis dengan aslinya")).toBeVisible();
+  await expect(modeGroup.getByRole("button", { name: "Bisa dimatikan" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByText("Kualitas video tetap asli")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
   await page.getByRole("button", { name: "EN", exact: true }).click();
@@ -464,11 +464,11 @@ test("mode subtitle permanen dikirim sebagai pilihan terpisah", async ({ page })
   const softLink = page.getByRole("link", { name: /720p \+ subtitle Indonesia MP4/ });
   await expect(softLink).toHaveAttribute("href", "/api/download/mock?subtitle=sub-id");
 
-  const modeGroup = page.getByRole("group", { name: "Cara tampil" });
-  await modeGroup.getByRole("button", { name: "Permanen · lebih lama" }).click();
-  await expect(modeGroup.getByRole("button", { name: "Permanen · lebih lama" })).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByText("Video dikonversi ulang")).toBeVisible();
-  const burnLink = page.getByRole("link", { name: /720p \+ subtitle Indonesia permanen/ });
+  const modeGroup = page.getByRole("group", { name: "Tampilan subtitle" });
+  await modeGroup.getByRole("button", { name: "Selalu tampil" }).click();
+  await expect(modeGroup.getByRole("button", { name: "Selalu tampil" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByText("Prosesnya lebih lama")).toBeVisible();
+  const burnLink = page.getByRole("link", { name: /720p \+ subtitle Indonesia \(selalu tampil\)/ });
   await expect(burnLink).toHaveAttribute("href", "/api/download/mock?subtitle=sub-id&subtitle_mode=burn");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
@@ -487,8 +487,8 @@ test("mode permanen disembunyikan jika server tidak bisa membakar subtitle", asy
   await page.getByRole("button", { name: "Lihat pilihan" }).click();
   await page.getByRole("group", { name: "Subtitle" }).getByRole("button", { name: "Inggris" }).click();
 
-  const modeGroup = page.getByRole("group", { name: "Cara tampil" });
-  await expect(modeGroup.getByRole("button")).toHaveText(["Bisa dinyalakan · kualitas asli"]);
+  const modeGroup = page.getByRole("group", { name: "Tampilan subtitle" });
+  await expect(modeGroup.getByRole("button")).toHaveText(["Bisa dimatikan"]);
   await expect(page.getByText("FFmpeg-nya dibuat tanpa libass")).toBeVisible();
   await expect(page.getByRole("link", { name: /720p \+ subtitle Inggris MP4/ })).toHaveAttribute("href", "/api/download/mock?subtitle=sub-en");
 });
