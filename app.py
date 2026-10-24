@@ -2004,6 +2004,7 @@ def health():
     js_runtimes = _base_ydl_options().get("js_runtimes") or {}
     return jsonify({
         "ok": True,
+        "version": os.environ.get("LINKDROP_VERSION", "dev"),
         "runtime": "vercel" if IS_VERCEL else "local",
         "ffmpeg": bool(shutil.which("ffmpeg")),
         "js_runtime": next(iter(js_runtimes), None),

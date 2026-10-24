@@ -21,7 +21,8 @@ Bind Linkdrop to `127.0.0.1` so that only `cloudflared` on the same computer can
 Windows PowerShell:
 
 ```powershell
-$secret = [Convert]::ToHexString((1..32 | ForEach-Object { Get-Random -Maximum 256 }))
+$bytes = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+$secret = -join ($bytes | ForEach-Object { $_.ToString("x2") })
 docker rm --force linkdrop 2>$null
 docker run --detach --name linkdrop --restart unless-stopped `
   --publish 127.0.0.1:5050:8080 `

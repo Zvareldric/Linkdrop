@@ -52,7 +52,8 @@ Open PowerShell and run:
 git clone https://github.com/Zvareldric/Linkdrop.git
 Set-Location Linkdrop
 
-$secret = [Convert]::ToHexString((1..32 | ForEach-Object { Get-Random -Maximum 256 }))
+$bytes = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+$secret = -join ($bytes | ForEach-Object { $_.ToString("x2") })
 docker build -t linkdrop .
 docker run --detach --name linkdrop --restart unless-stopped `
   --publish 127.0.0.1:5050:8080 `
@@ -97,6 +98,7 @@ Open [http://127.0.0.1:5000](http://127.0.0.1:5000). Linux users should install 
 - [Installation](docs/INSTALLATION.md) — Windows/Docker Desktop first, then macOS and Linux.
 - [Private phone access](docs/TAILSCALE.md) — access Linkdrop safely through Tailscale.
 - [Public access without a VPS](docs/CLOUDFLARE_TUNNEL.md) — publish Linkdrop from your computer with Cloudflare Tunnel and a password.
+- [Automatic updates](docs/AUTO_UPDATE.md) — keep Linkdrop on your computer in sync with this repository.
 - [Deployment](docs/DEPLOYMENT.md) — persistent hosting and operational limits.
 - [Architecture](docs/ARCHITECTURE.md) — media flow, temporary files, and security model.
 
