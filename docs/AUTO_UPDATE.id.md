@@ -4,6 +4,8 @@
 
 Linkdrop di komputer Anda dapat memperbarui dirinya sendiri setiap kali repository GitHub berubah. Tailscale Serve dan Cloudflare Tunnel tetap meneruskan ke port lokal yang sama, sehingga alamat privat atau publik Anda menampilkan versi baru tanpa perubahan lain.
 
+Di Mac, sebaiknya gunakan [macOS tanpa Docker](MACOS.id.md): pembaruannya sama, tanpa beban memori Docker Desktop.
+
 ## Cara kerja
 
 1. Setiap perubahan di `main` yang lulus tes akan diterbitkan GitHub Actions sebagai image Docker ke `ghcr.io/zvareldric/linkdrop:latest`. Image juga dibangun ulang setiap Senin, sehingga yt-dlp tetap terbaru walaupun kodenya tidak berubah.
