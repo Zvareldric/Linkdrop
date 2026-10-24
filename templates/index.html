@@ -1221,7 +1221,7 @@
         <div class="progress-track"><div class="progress-bar" id="progressBar"></div></div>
         <div class="progress-foot">
           <p class="progress-detail" id="progressDetail" data-i18n="keepPageOpen">Jangan tutup halaman sampai file tersimpan.</p>
-          <p class="progress-note" id="progressNote" hidden data-i18n="canLeavePage">Boleh pindah aplikasi atau mematikan layar. Proses tetap berjalan di server.</p>
+          <p class="progress-note" id="progressNote" hidden data-i18n="canLeavePage">Server sedang menyiapkan file. Boleh pindah aplikasi atau mematikan layar.</p>
           <div class="progress-actions">
             <button class="progress-cancel" id="cancelDownload" type="button" data-i18n="cancel">Batalkan</button>
             <button class="progress-save" id="saveDownload" type="button" data-i18n="saveToDevice">Simpan ke perangkat</button>
@@ -1304,6 +1304,7 @@
     const saveDownload = document.getElementById("saveDownload");
     const saveDialog = document.getElementById("saveDialog");
     const saveDialogFilename = document.getElementById("saveDialogFilename");
+    const saveDialogDetail = document.getElementById("saveDialogDetail");
     const closeSaveDialogButton = document.getElementById("closeSaveDialog");
     const confirmSaveDownload = document.getElementById("confirmSaveDownload");
     const singlePanel = document.getElementById("singlePanel");
@@ -1328,6 +1329,9 @@
     const maxBatchItems = {{ max_batch_items }};
     const backgroundJobs = {{ "true" if background_jobs else "false" }};
     const jobStorageKey = "linkdrop-active-job";
+    // iPhone and iPad Safari block downloads that are not started by a tap.
+    const canAutoSave = !(/iPad|iPhone|iPod/.test(navigator.userAgent)
+      || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
     const translations = {
       id: {
         publicMedia: "Media publik", languageChoice: "Pilihan bahasa", kicker: "Unduh media dengan kualitas real!",
@@ -1337,7 +1341,7 @@
         publicSupport: "Mendukung konten publik dari platform yang kompatibel.", maxFile: "Maks file", findingFormats: "Mencari kualitas dan format yang tersedia…", mediaPreview: "Pratinjau media",
         pasteMultipleLinks: "Tempel beberapa link", oneLinkPerLine: "Satu link per baris", analyze: "Analisis", maxMediaPerPackage: "Maksimal {{ max_batch_items }} media per paket. Link selebihnya masuk antrean berikutnya.",
         noMediaSelected: "Belum ada media dipilih", selectMediaQuality: "Pilih media dan kualitas yang ingin diunduh.", clearAll: "Batalkan semua pilihan", analyzeNextQueue: "Analisis antrean berikutnya",
-        downloadProgress: "Progres unduhan", preparingDownload: "Menyiapkan unduhan", keepPageOpen: "Jangan tutup halaman sampai file tersimpan.", canLeavePage: "Boleh pindah aplikasi atau mematikan layar. Proses tetap berjalan di server.", waitingForConnection: "Menunggu koneksi ke server… Proses tetap berjalan.", browserDownloadHint: "File diunduh oleh browser. Lihat notifikasi atau folder Unduhan.", cancel: "Batalkan", saveToDevice: "Simpan ke perangkat",
+        downloadProgress: "Progres unduhan", preparingDownload: "Menyiapkan unduhan", keepPageOpen: "Jangan tutup halaman sampai file tersimpan.", canLeavePage: "Server sedang menyiapkan file. Boleh pindah aplikasi atau mematikan layar.", waitingForConnection: "Menunggu koneksi ke server… Proses tetap berjalan.", readyOnServer: "File siap di server", moveToDevice: "Ketuk “Simpan sekarang” untuk memindahkan file dari server ke perangkat ini.", savingToDevice: "Menyimpan ke perangkat", browserDownloadHint: "Browser sedang memindahkan {filename} ke perangkat ini. Lihat notifikasi atau folder Unduhan.", autoSaveFallback: "Jika unduhan tidak muncul, ketuk “Simpan ke perangkat”.", cancel: "Batalkan", saveToDevice: "Simpan ke perangkat",
         platformMarqueeTitle: "Satu tempat untuk link favoritmu.", fileReady: "File siap disimpan", chooseStorage: "Pilih tempat penyimpanan agar file tetap tersedia di perangkat Anda.", filename: "Nama file",
         keepExtension: "Ekstensi asli akan dipertahankan.", later: "Nanti saja", saveNow: "Simpan sekarang", legal: "Gunakan hanya untuk konten milik sendiri, berlisensi, atau yang Anda punya izin untuk mengunduh. Patuhi hak cipta dan ketentuan platform.",
         downloadFailed: "Unduhan gagal", mediaFile: "File media", fileSaved: "File tersimpan", savedToDevice: "{filename} berhasil disimpan ke perangkat.", saveCancelled: "Penyimpanan dibatalkan. Tekan tombol simpan untuk mencoba lagi.",
@@ -1345,7 +1349,7 @@
         saveStarted: "Penyimpanan dimulai", previewSaveHint: "Jika pratinjau terbuka, gunakan menu Bagikan lalu pilih “Simpan ke File”.", preparingChoice: "Menyiapkan {label}", connecting: "Menghubungi server…",
         cannotStart: "Unduhan tidak dapat dimulai.", noStreaming: "Browser tidak mendukung progres unduhan streaming.", temporaryStorage: "penyimpanan sementara perangkat", browserMemory: "memori browser",
         sendingFile: "Mengirim file ke browser", bytesFrom: "{received} dari {total}", missingMetadata: "Metadata file tidak diterima dengan benar.", processingFailed: "Unduhan gagal diproses.", connectionLost: "Koneksi terputus sebelum unduhan selesai.",
-        pressSave: "Tekan “Simpan ke perangkat” untuk menyimpan {filename}.", downloadCancelled: "Unduhan dibatalkan.", downloadError: "Terjadi kesalahan saat mengunduh.", formatReady: "Format siap dipilih",
+        pressSave: "Tekan “Simpan ke perangkat” untuk menyimpan {filename}.", pressSaveFromServer: "Ketuk “Simpan ke perangkat” untuk memindahkan {filename} ke perangkat ini.", downloadCancelled: "Unduhan dibatalkan.", downloadError: "Terjadi kesalahan saat mengunduh.", formatReady: "Format siap dipilih",
         video: "Video", audio: "Audio", package: "Paket {number} · {count} media", unknownSize: " + {count} ukuran belum diketahui", downloadZip: "Unduh sebagai ZIP", downloadPackage: "Unduh paket {number}",
         selectedCount: "{selected} dari {ready} media dipilih", estimate: "Perkiraan {size}{unknown}", selectAll: "Pilih semua", processingGradually: "{count} media akan diproses secara bertahap.",
         largestPackage: "Paket terbesar memakai sekitar {percent}% batas penyimpanan aman.", splitPackages: "Unduhan dibagi menjadi {count} paket ZIP agar tiap paket tetap aman (maks. {max}). Total: {total}.",
@@ -1370,7 +1374,7 @@
         publicSupport: "Supports public content from compatible platforms.", maxFile: "Max file", findingFormats: "Finding available quality and formats…", mediaPreview: "Media preview",
         pasteMultipleLinks: "Paste multiple links", oneLinkPerLine: "One link per line", analyze: "Analyze", maxMediaPerPackage: "Up to {{ max_batch_items }} media per package. Extra links move to the next queue.",
         noMediaSelected: "No media selected", selectMediaQuality: "Select the media and quality you want to download.", clearAll: "Clear all", analyzeNextQueue: "Analyze the next queue",
-        downloadProgress: "Download progress", preparingDownload: "Preparing download", keepPageOpen: "Keep this page open until the file is saved.", canLeavePage: "You can switch apps or turn off the screen. Processing continues on the server.", waitingForConnection: "Waiting for the server connection… Processing continues.", browserDownloadHint: "The browser is downloading the file. Check your notifications or Downloads folder.", cancel: "Cancel", saveToDevice: "Save to device",
+        downloadProgress: "Download progress", preparingDownload: "Preparing download", keepPageOpen: "Keep this page open until the file is saved.", canLeavePage: "The server is preparing the file. You can switch apps or turn off the screen.", waitingForConnection: "Waiting for the server connection… Processing continues.", readyOnServer: "File ready on the server", moveToDevice: "Tap “Save now” to move the file from the server to this device.", savingToDevice: "Saving to device", browserDownloadHint: "The browser is moving {filename} to this device. Check your notifications or Downloads folder.", autoSaveFallback: "If no download appears, tap “Save to device”.", cancel: "Cancel", saveToDevice: "Save to device",
         platformMarqueeTitle: "One place for your favorite links.", fileReady: "File ready to save", chooseStorage: "Choose a save location to keep the file available on your device.", filename: "File name",
         keepExtension: "The original extension will be preserved.", later: "Later", saveNow: "Save now", legal: "Use only for content you own, that is licensed, or that you have permission to download. Follow copyright laws and platform terms.",
         downloadFailed: "Download failed", mediaFile: "Media file", fileSaved: "File saved", savedToDevice: "{filename} was saved to your device.", saveCancelled: "Saving was cancelled. Press save to try again.",
@@ -1378,7 +1382,7 @@
         saveStarted: "Saving started", previewSaveHint: "If a preview opens, use Share and choose “Save to Files”.", preparingChoice: "Preparing {label}", connecting: "Connecting to the server…",
         cannotStart: "The download could not be started.", noStreaming: "This browser does not support streaming download progress.", temporaryStorage: "temporary device storage", browserMemory: "browser memory",
         sendingFile: "Sending file to browser", bytesFrom: "{received} of {total}", missingMetadata: "File metadata was not received correctly.", processingFailed: "The download could not be processed.", connectionLost: "The connection ended before the download was complete.",
-        pressSave: "Press “Save to device” to save {filename}.", downloadCancelled: "Download cancelled.", downloadError: "An error occurred while downloading.", formatReady: "Formats ready to choose",
+        pressSave: "Press “Save to device” to save {filename}.", pressSaveFromServer: "Tap “Save to device” to move {filename} to this device.", downloadCancelled: "Download cancelled.", downloadError: "An error occurred while downloading.", formatReady: "Formats ready to choose",
         video: "Video", audio: "Audio", package: "Package {number} · {count} media", unknownSize: " + {count} sizes unknown", downloadZip: "Download as ZIP", downloadPackage: "Download package {number}",
         selectedCount: "{selected} of {ready} media selected", estimate: "Estimated {size}{unknown}", selectAll: "Select all", processingGradually: "{count} media will be processed in stages.",
         largestPackage: "The largest package uses about {percent}% of the safe storage limit.", splitPackages: "The download is split into {count} ZIP packages to keep each package safe (max. {max}). Total: {total}.",
@@ -1566,6 +1570,7 @@
     function openSaveDialog() {
       if (!preparedDownload || saveDialog.open) return;
       saveDialogFilename.value = preparedDownload.filename;
+      saveDialogDetail.textContent = t(preparedDownload.url ? "moveToDevice" : "chooseStorage");
       saveDialog.showModal();
       confirmSaveDownload.focus();
     }
@@ -1594,6 +1599,37 @@
       openSaveDialog();
     }
 
+    function startBrowserDownload(currentDownload, filename, automatic = false) {
+      // A normal browser download keeps going in the background and can
+      // resume after the screen turns off.
+      const link = document.createElement("a");
+      link.href = `${currentDownload.url}?name=${encodeURIComponent(filename)}`;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      currentDownload.saved = true;
+      rememberJob(null);
+      closeSaveDialog();
+      const hint = t("browserDownloadHint", { filename });
+      updateDownloadProgress(100, t("savingToDevice"), automatic ? `${hint} ${t("autoSaveFallback")}` : hint);
+      schedulePreparedDownloadCleanup(currentDownload);
+    }
+
+    function autoSaveWhenVisible(currentDownload) {
+      // Downloads started from a hidden tab may be dropped, so wait until
+      // the user is back on the page.
+      const save = () => {
+        if (document.visibilityState !== "visible") return false;
+        document.removeEventListener("visibilitychange", save);
+        if (preparedDownload === currentDownload && !currentDownload.saved) {
+          startBrowserDownload(currentDownload, currentDownload.filename, true);
+        }
+        return true;
+      };
+      if (!save()) document.addEventListener("visibilitychange", save);
+    }
+
     function schedulePreparedDownloadCleanup(currentDownload) {
       if (preparedCleanupTimer) window.clearTimeout(preparedCleanupTimer);
       preparedCleanupTimer = window.setTimeout(() => {
@@ -1607,19 +1643,7 @@
       const filename = selectedFilename(currentDownload);
 
       if (currentDownload.url) {
-        // A normal browser download keeps going in the background and can
-        // resume after the screen turns off.
-        const link = document.createElement("a");
-        link.href = `${currentDownload.url}?name=${encodeURIComponent(filename)}`;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        currentDownload.saved = true;
-        rememberJob(null);
-        closeSaveDialog();
-        updateDownloadProgress(100, t("saveStarted"), t("browserDownloadHint"));
-        schedulePreparedDownloadCleanup(currentDownload);
+        startBrowserDownload(currentDownload, filename);
         return;
       }
 
@@ -1855,8 +1879,9 @@
         saved: false
       };
       saveDownload.classList.add("visible");
-      updateDownloadProgress(100, t("fileReady"), t("pressSave", { filename: preparedDownload.filename }));
-      openSaveDialog();
+      updateDownloadProgress(100, t("readyOnServer"), t("pressSaveFromServer", { filename: preparedDownload.filename }));
+      if (canAutoSave) autoSaveWhenVisible(preparedDownload);
+      else openSaveDialog();
       job.onPrepared?.(status);
     }
 
