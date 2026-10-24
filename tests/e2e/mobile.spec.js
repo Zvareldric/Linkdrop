@@ -98,6 +98,13 @@ test("halaman tetap utuh pada viewport ponsel", async ({ page }) => {
   }
 });
 
+test("browser tidak menyimpan riwayat link yang pernah ditempel", async ({ page }) => {
+  await expect(page.locator("#analyzeForm")).toHaveAttribute("autocomplete", "off");
+  await expect(page.getByLabel("Tempel link media")).toHaveAttribute("autocomplete", "off");
+  await expect(page.locator("#batchForm")).toHaveAttribute("autocomplete", "off");
+  await expect(page.locator("#batchInput")).toHaveAttribute("autocomplete", "off");
+});
+
 test("dekorasi latar tetap terlihat proporsional pada layar ultrawide", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop-chrome", "Viewport ultrawide hanya diuji di desktop.");
   await page.setViewportSize({ width: 2560, height: 1440 });
