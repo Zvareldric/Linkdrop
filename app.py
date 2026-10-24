@@ -54,7 +54,7 @@ FFMPEG_TIMEOUT = int(os.environ.get("FFMPEG_TIMEOUT", 60 * 60))
 SUBTITLE_LANGUAGES = ("id", "en")
 SUBTITLE_SUFFIXES = {".json3", ".srt", ".vtt", ".ass", ".ssa", ".srv1", ".srv2", ".srv3", ".ttml"}
 BURNABLE_SUBTITLE_SUFFIXES = {".srt", ".vtt", ".ass", ".ssa"}
-SUBTITLE_STREAM_CODECS = {".mp4": "mov_text", ".m4v": "mov_text", ".mov": "mov_text", ".mkv": "srt", ".webm": "webvtt"}
+SUBTITLE_STREAM_CODECS = {".mp4": "mov_text", ".m4v": "mov_text", ".mov": "mov_text"}
 SUBTITLE_LANGUAGE_TAGS = {"id": ("ind", "Indonesia"), "en": ("eng", "English")}
 # White text on a translucent black box, close to YouTube's default captions.
 SUBTITLE_STYLE = (
@@ -661,17 +661,14 @@ def _video_format_selector(height: int) -> str:
     )
 
 
-def _original_video_format_selector(height: int) -> str:
-    """Pick the best source streams at a resolution without caring about codec."""
-
-    return f"bv*[height={height}]+ba/b[height={height}]/bv*[height<={height}]+ba/b[height<={height}]"
-
-
 def _is_h264(fmt: dict) -> bool:
     return str(fmt.get("vcodec") or "").lower().startswith(("h264", "avc"))
 
 
-AUDIO_FORMAT_NAMES = {"m4a": "M4A (AAC)", "webm": "Opus (WebM)", "opus": "Opus", "mp3": "MP3", "ogg": "Ogg Vorbis"}
+# Original audio is only offered in containers that every device plays;
+# WebM/Opus sources are available as MP3 instead.
+ORIGINAL_AUDIO_FORMATS = {"m4a": "M4A (AAC)", "mp3": "MP3"}
+ORIGINAL_AUDIO_SELECTOR = "bestaudio[ext=m4a]/bestaudio[ext=mp3]"
 
 
 def _make_token(url: str, kind: str, **options) -> str:
@@ -716,56 +713,42 @@ def _build_choices(url: str, info: dict) -> dict:
         estimated_bytes = _estimated_video_size(formats, height, info.get("duration"))
         size = _pretty_bytes(estimated_bytes)
         size_text = f" · sekitar {size}" if size else " · ukuran dihitung saat mengunduh"
-        has_h264 = any(_is_h264(fmt) and fmt.get("height") == height for fmt in formats)
-        if has_h264:
+        if any(_is_h264(fmt) and fmt.get("height") == height for fmt in formats):
             # The source already offers H.264 here, so the MP4 is the original stream.
-            video_choices.append(_choice(
-                url, "video", f"{height}p", "MP4 · kualitas asli" + size_text,
-                choice_id=f"video:{height}", height=height, estimated_bytes=estimated_bytes,
-            ))
-            continue
-        # Only VP9/AV1 exists at this resolution (common above 1080p). Keep the
-        # source streams untouched, and offer an MP4 copy for older devices.
+            detail = "MP4 · kualitas asli" + size_text
+        else:
+            # Only VP9/AV1 exists at this resolution (common above 1080p), so the
+            # video is converted to H.264 to deliver an MP4.
+            detail = "MP4 · dikonversi ulang · lebih lama" + size_text
         video_choices.append(_choice(
-            url, "video", f"{height}p", "Kualitas asli · WebM/MKV · tanpa konversi" + size_text,
-            choice_id=f"video:{height}:original", height=height, container="original",
-            estimated_bytes=estimated_bytes,
-        ))
-        video_choices.append(_choice(
-            url, "video", f"{height}p MP4", "MP4 untuk iPhone/TV · dikonversi ulang · lebih lama",
-            choice_id=f"video:{height}:mp4", height=height, estimated_bytes=estimated_bytes,
+            url, "video", f"{height}p", detail,
+            choice_id=f"video:{height}", height=height, estimated_bytes=estimated_bytes,
         ))
 
     duration = info.get("duration")
     audio_choices = []
     source_audio = _best_audio_format(formats)
     if source_audio:
-        m4a_audio = max(
-            (fmt for fmt in formats if fmt.get("vcodec") == "none" and fmt.get("ext") == "m4a"
-             and fmt.get("acodec") not in (None, "none")),
+        original_audio = max(
+            (fmt for fmt in formats if fmt.get("vcodec") == "none" and fmt.get("acodec") not in (None, "none")
+             and str(fmt.get("ext") or "").lower() in ORIGINAL_AUDIO_FORMATS),
             key=lambda fmt: fmt.get("abr") or fmt.get("tbr") or 0,
             default=None,
         )
-        originals = [source_audio]
-        if m4a_audio and m4a_audio.get("format_id") != source_audio.get("format_id"):
-            originals.append(m4a_audio)
-        for fmt in originals:
-            extension = str(fmt.get("ext") or "").lower()
-            name = AUDIO_FORMAT_NAMES.get(extension, extension.upper() or "Audio")
-            bitrate = fmt.get("abr") or fmt.get("tbr")
-            estimated_bytes = _format_size(fmt, duration)
+        if original_audio:
+            bitrate = original_audio.get("abr") or original_audio.get("tbr")
+            estimated_bytes = _format_size(original_audio, duration)
             size = _pretty_bytes(estimated_bytes)
             detail = " · ".join(filter(None, [
-                name,
+                ORIGINAL_AUDIO_FORMATS[str(original_audio["ext"]).lower()],
                 f"{round(bitrate)} kbps" if bitrate else None,
                 "tanpa konversi",
                 f"sekitar {size}" if size else None,
             ]))
-            is_best = fmt is source_audio
             audio_choices.append(_choice(
-                url, "audio", "Audio asli" if is_best else "Audio asli M4A", detail,
-                choice_id="audio:source" if is_best else "audio:source-m4a",
-                codec="source", format_id=str(fmt.get("format_id") or ""), estimated_bytes=estimated_bytes,
+                url, "audio", "Audio asli", detail,
+                choice_id="audio:source", codec="source",
+                format_id=str(original_audio.get("format_id") or ""), estimated_bytes=estimated_bytes,
             ))
 
         for bitrate in (128, 192, 320):
@@ -1064,7 +1047,7 @@ def _embed_subtitle_track(
         raise UserFacingError("FFmpeg tidak tersedia untuk menambahkan subtitle.")
     suffix = path.suffix.lower()
     if suffix not in SUBTITLE_STREAM_CODECS:
-        suffix = ".mkv"
+        suffix = ".mp4"
     codec = SUBTITLE_STREAM_CODECS[suffix]
     tag, title = SUBTITLE_LANGUAGE_TAGS.get(language.split("-")[0].lower(), ("und", "Subtitle"))
     if progress:
@@ -1110,14 +1093,15 @@ def _ensure_compatible_mp4(
     cancelled: threading.Event | None = None,
     subtitle: Path | None = None,
 ) -> Path:
-    """Transcode incompatible MP4 codecs while retaining the selected resolution.
+    """Deliver an MP4 that common devices play, keeping the selected resolution.
 
-    With ``subtitle``, the captions are always burned into the picture, so the
+    Compatible H.264/AAC streams in another container (WebM, MKV) are moved
+    into MP4 without re-encoding; other codecs are transcoded. With
+    ``subtitle``, the captions are always burned into the picture, so the
     video is re-encoded even when its codecs are already compatible.
     """
 
-    if path.suffix.lower() != ".mp4" and not subtitle:
-        return path
+    needs_mp4_container = path.suffix.lower() != ".mp4"
 
     ffprobe = shutil.which("ffprobe")
     ffmpeg = shutil.which("ffmpeg")
@@ -1142,10 +1126,14 @@ def _ensure_compatible_mp4(
     except (subprocess.CalledProcessError, json.JSONDecodeError) as exc:
         raise UserFacingError("File video hasil unduhan tidak dapat divalidasi.") from exc
 
-    if not subtitle and _mp4_streams_are_compatible(streams):
+    remux_only = not subtitle and _mp4_streams_are_compatible(streams)
+    if remux_only and not needs_mp4_container:
         return path
 
-    if subtitle:
+    if remux_only:
+        phase = "Menyiapkan MP4"
+        detail = "Memindahkan video ke MP4 tanpa konversi…"
+    elif subtitle:
         phase = "Menempelkan subtitle ke video"
         detail = "Menggabungkan teks subtitle ke gambar video…"
     else:
@@ -1172,16 +1160,18 @@ def _ensure_compatible_mp4(
     command = [ffmpeg, "-y", "-nostats", "-progress", "pipe:1", "-i", f"./{path.name}", "-map", "0:v:0", "-map", "0:a?"]
     if subtitle:
         command += ["-vf", f"subtitles={subtitle.name}:force_style='{SUBTITLE_STYLE}'"]
-    command += [
-        "-c:v", "libx264",
-        "-preset", "fast",
-        "-crf", "18",
-        "-pix_fmt", "yuv420p",
-        "-c:a", "aac",
-        "-b:a", "192k",
-        "-movflags", "+faststart",
-        f"./{converted.name}",
-    ]
+    if remux_only:
+        command += ["-c", "copy"]
+    else:
+        command += [
+            "-c:v", "libx264",
+            "-preset", "fast",
+            "-crf", "18",
+            "-pix_fmt", "yuv420p",
+            "-c:a", "aac",
+            "-b:a", "192k",
+        ]
+    command += ["-movflags", "+faststart", f"./{converted.name}"]
     try:
         _run_media_command(command, cancelled, cwd=path.parent, on_progress=report_conversion)
     except subprocess.CalledProcessError as exc:
@@ -1285,17 +1275,11 @@ def _download_video_or_audio(
         height = int(payload.get("height", 0))
         if height < 1 or height > 4320:
             raise UserFacingError("Pilihan kualitas video tidak valid.")
-        if payload.get("container") == "original":
-            options.update({
-                "format": _original_video_format_selector(height),
-                "merge_output_format": "webm/mkv",
-            })
-        else:
-            options.update({
-                "format": _video_format_selector(height),
-                "merge_output_format": "mp4",
-                "postprocessor_args": {"Merger": ["-movflags", "+faststart"]},
-            })
+        options.update({
+            "format": _video_format_selector(height),
+            "merge_output_format": "mp4",
+            "postprocessor_args": {"Merger": ["-movflags", "+faststart"]},
+        })
         if subtitle := payload.get("subtitle"):
             options.update({
                 "writesubtitles": not subtitle["automatic"],
@@ -1306,9 +1290,12 @@ def _download_video_or_audio(
     elif kind == "audio":
         codec = payload.get("codec")
         options["format"] = "bestaudio/best"
-        format_id = str(payload.get("format_id") or "")
-        if codec == "source" and re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", format_id):
-            options["format"] = f"{format_id}/bestaudio/best"
+        if codec == "source":
+            # Never fall back to a WebM/Opus stream for "original" audio.
+            format_id = str(payload.get("format_id") or "")
+            options["format"] = ORIGINAL_AUDIO_SELECTOR
+            if re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", format_id):
+                options["format"] = f"{format_id}/{ORIGINAL_AUDIO_SELECTOR}"
         if codec == "mp3":
             bitrate = int(payload.get("bitrate", 0))
             if bitrate not in {128, 192, 320}:
@@ -1334,8 +1321,7 @@ def _download_video_or_audio(
         if subtitle_file and subtitle.get("burn"):
             result = _ensure_compatible_mp4(result, progress, cancelled, subtitle_file)
         else:
-            if payload.get("container") != "original":
-                result = _ensure_compatible_mp4(result, progress, cancelled)
+            result = _ensure_compatible_mp4(result, progress, cancelled)
             if subtitle_file:
                 result = _embed_subtitle_track(result, subtitle_file, subtitle["lang"], progress, cancelled)
     if result.stat().st_size > MAX_MEDIA_BYTES:
@@ -1389,7 +1375,11 @@ def _best_progressive_video_source(entry: dict) -> tuple[str, dict, str] | None:
         ]
     if not formats:
         return None
-    selected = max(formats, key=lambda fmt: ((fmt.get("height") or 0), (fmt.get("tbr") or 0)))
+    selected = max(formats, key=lambda fmt: (
+        str(fmt.get("ext") or "mp4").lower() == "mp4",
+        fmt.get("height") or 0,
+        fmt.get("tbr") or 0,
+    ))
     return selected["url"], selected.get("http_headers") or {}, selected.get("ext") or "mp4"
 
 

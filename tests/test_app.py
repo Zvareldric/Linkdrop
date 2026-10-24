@@ -1012,7 +1012,7 @@ def video_packets_md5(path):
 class OriginalQualityTests(unittest.TestCase):
     url = "https://www.youtube.com/watch?v=abc123"
 
-    def test_resolutions_without_h264_offer_original_and_mp4_copies(self):
+    def test_resolutions_without_h264_are_offered_as_converted_mp4(self):
         info = {
             **SAMPLE_INFO,
             "formats": SAMPLE_INFO["formats"] + [
@@ -1020,15 +1020,13 @@ class OriginalQualityTests(unittest.TestCase):
             ],
         }
         video = media_app._build_choices(self.url, info)["video"]
-        self.assertEqual([choice["label"] for choice in video], ["360p", "1080p", "2160p", "2160p MP4"])
+        self.assertEqual([choice["label"] for choice in video], ["360p", "1080p", "2160p"])
         self.assertIn("MP4 · kualitas asli", video[1]["detail"])
-        self.assertIn("tanpa konversi", video[2]["detail"])
-        self.assertIn("dikonversi ulang", video[3]["detail"])
-        self.assertEqual(media_app._signer.loads(video[2]["token"])["container"], "original")
-        self.assertNotIn("container", media_app._signer.loads(video[3]["token"]))
-        self.assertEqual(len({choice["id"] for choice in video}), 4)
+        self.assertTrue(video[2]["detail"].startswith("MP4 · dikonversi ulang"))
+        self.assertNotIn("container", media_app._signer.loads(video[2]["token"]))
+        self.assertFalse(any("WebM" in choice["detail"] or "MKV" in choice["detail"] for choice in video))
 
-    def test_best_original_audio_and_m4a_are_offered_without_conversion(self):
+    def test_original_audio_is_m4a_only(self):
         info = {
             **SAMPLE_INFO,
             "formats": SAMPLE_INFO["formats"] + [
@@ -1036,37 +1034,83 @@ class OriginalQualityTests(unittest.TestCase):
             ],
         }
         audio = media_app._build_choices(self.url, info)["audio"]
-        self.assertEqual([choice["label"] for choice in audio][:2], ["Audio asli", "Audio asli M4A"])
-        self.assertTrue(audio[0]["detail"].startswith("Opus (WebM) · 160 kbps · tanpa konversi"))
-        self.assertEqual(media_app._signer.loads(audio[0]["token"])["format_id"], "251")
-        self.assertEqual(media_app._signer.loads(audio[1]["token"])["format_id"], "140")
+        self.assertEqual([choice["label"] for choice in audio], ["Audio asli", "MP3 128 kbps", "MP3 192 kbps", "MP3 320 kbps"])
+        self.assertTrue(audio[0]["detail"].startswith("M4A (AAC) · 128 kbps · tanpa konversi"))
+        self.assertEqual(media_app._signer.loads(audio[0]["token"])["format_id"], "140")
+        self.assertFalse(any("WebM" in choice["detail"] or "Opus" in choice["detail"] for choice in audio))
 
-    def test_original_video_download_skips_conversion(self):
-        FakeYoutubeDL.created_files = [("Video [abc].webm", b"webm")]
-        payload = {"url": self.url, "kind": "video", "height": 2160, "container": "original"}
+    def test_opus_only_source_offers_mp3_but_no_original(self):
+        info = {**SAMPLE_INFO, "formats": [
+            {"format_id": "251", "vcodec": "none", "acodec": "opus", "abr": 160, "ext": "webm", "filesize": 2_500_000},
+        ]}
+        audio = media_app._build_choices(self.url, info)["audio"]
+        self.assertEqual([choice["label"] for choice in audio], ["MP3 128 kbps", "MP3 192 kbps", "MP3 320 kbps"])
+
+    def test_video_download_always_produces_mp4(self):
+        FakeYoutubeDL.created_files = [("Video [abc].mp4", b"mp4")]
+        payload = {"url": self.url, "kind": "video", "height": 2160}
         with tempfile.TemporaryDirectory() as folder, \
                 patch.object(media_app.yt_dlp, "YoutubeDL", FakeYoutubeDL), \
-                patch.object(media_app, "_ensure_compatible_mp4") as convert:
-            result = media_app._download_video_or_audio(payload, Path(folder))
-        convert.assert_not_called()
-        self.assertEqual(result.name, "Video [abc].webm")
-        self.assertEqual(FakeYoutubeDL.last_options["merge_output_format"], "webm/mkv")
-        self.assertTrue(FakeYoutubeDL.last_options["format"].startswith("bv*[height=2160]+ba"))
+                patch.object(media_app, "_ensure_compatible_mp4", side_effect=lambda path, *args: path) as convert:
+            media_app._download_video_or_audio(payload, Path(folder))
+        convert.assert_called_once()
+        self.assertEqual(FakeYoutubeDL.last_options["merge_output_format"], "mp4")
 
-    def test_original_audio_download_uses_signed_format_without_postprocessing(self):
-        FakeYoutubeDL.created_files = [("Audio [abc].webm", b"opus")]
-        payload = {"url": self.url, "kind": "audio", "codec": "source", "format_id": "251"}
+    def test_original_audio_download_never_falls_back_to_webm(self):
+        FakeYoutubeDL.created_files = [("Audio [abc].m4a", b"aac")]
+        payload = {"url": self.url, "kind": "audio", "codec": "source", "format_id": "140"}
         with tempfile.TemporaryDirectory() as folder, patch.object(media_app.yt_dlp, "YoutubeDL", FakeYoutubeDL):
             media_app._download_video_or_audio(payload, Path(folder))
-        self.assertEqual(FakeYoutubeDL.last_options["format"], "251/bestaudio/best")
+        self.assertEqual(FakeYoutubeDL.last_options["format"], "140/bestaudio[ext=m4a]/bestaudio[ext=mp3]")
         self.assertNotIn("postprocessors", FakeYoutubeDL.last_options)
 
-    def test_unsafe_format_id_falls_back_to_best_audio(self):
+    def test_unsafe_format_id_falls_back_to_m4a_audio(self):
         FakeYoutubeDL.created_files = [("Audio [abc].m4a", b"aac")]
         payload = {"url": self.url, "kind": "audio", "codec": "source", "format_id": "251+bv*"}
         with tempfile.TemporaryDirectory() as folder, patch.object(media_app.yt_dlp, "YoutubeDL", FakeYoutubeDL):
             media_app._download_video_or_audio(payload, Path(folder))
-        self.assertEqual(FakeYoutubeDL.last_options["format"], "bestaudio/best")
+        self.assertEqual(FakeYoutubeDL.last_options["format"], "bestaudio[ext=m4a]/bestaudio[ext=mp3]")
+
+    def test_gallery_video_prefers_mp4_file(self):
+        entry = {"formats": [
+            {"url": "https://cdn.example.com/a.webm", "ext": "webm", "vcodec": "vp9", "acodec": "opus", "height": 1080},
+            {"url": "https://cdn.example.com/a.mp4", "ext": "mp4", "vcodec": "h264", "acodec": "aac", "height": 720},
+        ]}
+        self.assertEqual(media_app._best_progressive_video_source(entry)[0], "https://cdn.example.com/a.mp4")
+
+    @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "FFmpeg is required")
+    def test_h264_in_mkv_is_moved_to_mp4_without_reencoding(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / "Video [abc].mkv"
+            subprocess.run(
+                ["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=10:duration=2",
+                 "-f", "lavfi", "-i", "sine=duration=2", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                 "-c:a", "aac", "-shortest", str(source)],
+                check=True,
+            )
+            before = video_packets_md5(source)
+            result = media_app._ensure_compatible_mp4(source)
+            self.assertEqual(result.suffix, ".mp4")
+            self.assertFalse(source.exists())
+            self.assertEqual(video_packets_md5(result), before)
+
+    @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "FFmpeg is required")
+    def test_vp9_webm_is_converted_to_h264_mp4(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / "Video [abc].webm"
+            subprocess.run(
+                ["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=10:duration=2",
+                 "-f", "lavfi", "-i", "sine=duration=2", "-c:v", "libvpx-vp9", "-b:v", "200k",
+                 "-c:a", "libopus", "-shortest", str(source)],
+                check=True,
+            )
+            result = media_app._ensure_compatible_mp4(source)
+            probe = subprocess.run(
+                ["ffprobe", "-v", "error", "-show_entries", "stream=codec_name", "-of", "csv=p=0", str(result)],
+                check=True, capture_output=True, text=True,
+            ).stdout.split()
+            self.assertEqual(result.suffix, ".mp4")
+            self.assertEqual(probe, ["h264", "aac"])
 
     def test_selectable_subtitle_is_added_without_burning(self):
         FakeYoutubeDL.created_files = [

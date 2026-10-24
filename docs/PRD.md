@@ -118,9 +118,8 @@ Tanpa solusi ini, pengguna harus memakai beberapa layanan berbeda, berhadapan de
 1. Estimasi ukuran yang lebih akurat sebelum unduh.
 2. Rate limiting per IP menggunakan storage eksternal.
 3. Riwayat lokal di browser, bukan server.
-4. Pilihan container WebM/MKV selain MP4.
-5. Monitoring terstruktur untuk error per extractor.
-6. Upload hasil ke object storage untuk file besar dan signed URL.
+4. Monitoring terstruktur untuk error per extractor.
+5. Upload hasil ke object storage untuk file besar dan signed URL.
 
 ### P0.7 Pengalaman ponsel
 

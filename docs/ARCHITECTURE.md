@@ -74,8 +74,8 @@ Resolution options come from extractor metadata. Linkdrop does not upscale video
 
 Every re-encode loses some quality, so Linkdrop avoids it wherever the source allows:
 
-- **Video.** When the source offers H.264 at a resolution, that stream is downloaded and merged into MP4 without re-encoding. Where only VP9 or AV1 exists (common above 1080p on YouTube), the interface offers two choices: the original streams in WebM or MKV with no conversion, and an MP4 copy re-encoded to H.264 for devices such as iPhone and older TVs.
-- **Audio.** "Original audio" downloads the best source audio stream untouched; when that is not M4A, an original M4A choice is offered for Apple devices. MP3 choices remain available and are labeled as converted.
+- **Video.** Every video is delivered as MP4. When the source offers H.264 at a resolution, that stream is downloaded and merged into MP4 without re-encoding. Compatible H.264/AAC streams in another container are moved into MP4 without re-encoding. Where only VP9 or AV1 exists (common above 1080p on YouTube), the video is converted to H.264, and the choice is labeled as converted.
+- **Audio.** "Original audio" downloads the best M4A (AAC) stream untouched and is offered only when the source has one; WebM/Opus streams are never delivered. MP3 choices remain available and are labeled as converted.
 - **Photos.** Photo files are always copied without recompression.
 
 Re-encodes that still happen use x264 `-preset fast -crf 18`. Faster presets were measured to lower quality, so they are not used by default.
@@ -86,7 +86,7 @@ When the source offers Indonesian or English subtitles, `/api/info` returns a si
 
 During the download, yt-dlp fetches the track (json3 on YouTube). Linkdrop converts json3 to SRT, ending each automatic-caption line when the next begins so rolling captions show one clean line instead of stacked duplicates. Two display modes follow:
 
-- **Toggleable (default).** FFmpeg copies the audio and video streams unchanged and adds the subtitle as a separate track (`mov_text` in MP4, SRT in MKV, WebVTT in WebM) tagged with its language and marked as the default track. This takes seconds, and the video is bit-identical to the source. Most players show it as a CC option; some Android gallery apps ignore subtitle tracks.
+- **Toggleable (default).** FFmpeg copies the audio and video streams unchanged and adds the subtitle as a separate track (`mov_text` in MP4) tagged with its language and marked as the default track. This takes seconds, and the video is bit-identical to the source. Most players show it as a CC option; some Android gallery apps ignore subtitle tracks.
 - **Burned in.** FFmpeg renders the text into the picture with libass in a white-on-translucent-black style similar to YouTube's captions. This always re-encodes the video to H.264 MP4, so it takes longer, slightly lowers quality, and reports its progress as a percentage. Container images install `fonts-dejavu-core` because libass cannot draw text without a font. Multi-link packages do not offer subtitles.
 
 ### Playback compatibility
