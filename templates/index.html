@@ -827,6 +827,14 @@
       overflow-wrap: anywhere;
     }
 
+    .progress-note {
+      margin: -6px 0 0;
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.5;
+    }
+
     .progress-foot {
       display: grid;
       gap: 12px;
@@ -1213,6 +1221,7 @@
         <div class="progress-track"><div class="progress-bar" id="progressBar"></div></div>
         <div class="progress-foot">
           <p class="progress-detail" id="progressDetail" data-i18n="keepPageOpen">Jangan tutup halaman sampai file tersimpan.</p>
+          <p class="progress-note" id="progressNote" hidden data-i18n="canLeavePage">Boleh pindah aplikasi atau mematikan layar. Proses tetap berjalan di server.</p>
           <div class="progress-actions">
             <button class="progress-cancel" id="cancelDownload" type="button" data-i18n="cancel">Batalkan</button>
             <button class="progress-save" id="saveDownload" type="button" data-i18n="saveToDevice">Simpan ke perangkat</button>
@@ -1290,6 +1299,7 @@
     const progressPercent = document.getElementById("progressPercent");
     const progressBar = document.getElementById("progressBar");
     const progressDetail = document.getElementById("progressDetail");
+    const progressNote = document.getElementById("progressNote");
     const cancelDownload = document.getElementById("cancelDownload");
     const saveDownload = document.getElementById("saveDownload");
     const saveDialog = document.getElementById("saveDialog");
@@ -1316,6 +1326,8 @@
     const batchTargetBytes = Math.floor(batchLimitBytes * .8);
     const batchWarningItems = {{ batch_warning_items }};
     const maxBatchItems = {{ max_batch_items }};
+    const backgroundJobs = {{ "true" if background_jobs else "false" }};
+    const jobStorageKey = "linkdrop-active-job";
     const translations = {
       id: {
         publicMedia: "Media publik", languageChoice: "Pilihan bahasa", kicker: "Unduh media dengan kualitas real!",
@@ -1325,7 +1337,7 @@
         publicSupport: "Mendukung konten publik dari platform yang kompatibel.", maxFile: "Maks file", findingFormats: "Mencari kualitas dan format yang tersedia…", mediaPreview: "Pratinjau media",
         pasteMultipleLinks: "Tempel beberapa link", oneLinkPerLine: "Satu link per baris", analyze: "Analisis", maxMediaPerPackage: "Maksimal {{ max_batch_items }} media per paket. Link selebihnya masuk antrean berikutnya.",
         noMediaSelected: "Belum ada media dipilih", selectMediaQuality: "Pilih media dan kualitas yang ingin diunduh.", clearAll: "Batalkan semua pilihan", analyzeNextQueue: "Analisis antrean berikutnya",
-        downloadProgress: "Progres unduhan", preparingDownload: "Menyiapkan unduhan", keepPageOpen: "Jangan tutup halaman sampai file tersimpan.", cancel: "Batalkan", saveToDevice: "Simpan ke perangkat",
+        downloadProgress: "Progres unduhan", preparingDownload: "Menyiapkan unduhan", keepPageOpen: "Jangan tutup halaman sampai file tersimpan.", canLeavePage: "Boleh pindah aplikasi atau mematikan layar. Proses tetap berjalan di server.", waitingForConnection: "Menunggu koneksi ke server… Proses tetap berjalan.", browserDownloadHint: "File diunduh oleh browser. Lihat notifikasi atau folder Unduhan.", cancel: "Batalkan", saveToDevice: "Simpan ke perangkat",
         platformMarqueeTitle: "Satu tempat untuk link favoritmu.", fileReady: "File siap disimpan", chooseStorage: "Pilih tempat penyimpanan agar file tetap tersedia di perangkat Anda.", filename: "Nama file",
         keepExtension: "Ekstensi asli akan dipertahankan.", later: "Nanti saja", saveNow: "Simpan sekarang", legal: "Gunakan hanya untuk konten milik sendiri, berlisensi, atau yang Anda punya izin untuk mengunduh. Patuhi hak cipta dan ketentuan platform.",
         downloadFailed: "Unduhan gagal", mediaFile: "File media", fileSaved: "File tersimpan", savedToDevice: "{filename} berhasil disimpan ke perangkat.", saveCancelled: "Penyimpanan dibatalkan. Tekan tombol simpan untuk mencoba lagi.",
@@ -1358,7 +1370,7 @@
         publicSupport: "Supports public content from compatible platforms.", maxFile: "Max file", findingFormats: "Finding available quality and formats…", mediaPreview: "Media preview",
         pasteMultipleLinks: "Paste multiple links", oneLinkPerLine: "One link per line", analyze: "Analyze", maxMediaPerPackage: "Up to {{ max_batch_items }} media per package. Extra links move to the next queue.",
         noMediaSelected: "No media selected", selectMediaQuality: "Select the media and quality you want to download.", clearAll: "Clear all", analyzeNextQueue: "Analyze the next queue",
-        downloadProgress: "Download progress", preparingDownload: "Preparing download", keepPageOpen: "Keep this page open until the file is saved.", cancel: "Cancel", saveToDevice: "Save to device",
+        downloadProgress: "Download progress", preparingDownload: "Preparing download", keepPageOpen: "Keep this page open until the file is saved.", canLeavePage: "You can switch apps or turn off the screen. Processing continues on the server.", waitingForConnection: "Waiting for the server connection… Processing continues.", browserDownloadHint: "The browser is downloading the file. Check your notifications or Downloads folder.", cancel: "Cancel", saveToDevice: "Save to device",
         platformMarqueeTitle: "One place for your favorite links.", fileReady: "File ready to save", chooseStorage: "Choose a save location to keep the file available on your device.", filename: "File name",
         keepExtension: "The original extension will be preserved.", later: "Later", saveNow: "Save now", legal: "Use only for content you own, that is licensed, or that you have permission to download. Follow copyright laws and platform terms.",
         downloadFailed: "Download failed", mediaFile: "Media file", fileSaved: "File saved", savedToDevice: "{filename} was saved to your device.", saveCancelled: "Saving was cancelled. Press save to try again.",
@@ -1391,6 +1403,7 @@
     let subtitleMode = "soft";
     let downloadActive = false;
     let activeDownloadController = null;
+    let activeJob = null;
     let preparedDownload = null;
     let preparedCleanupTimer = null;
     let batchItems = [];
@@ -1506,6 +1519,22 @@
       progressDetail.textContent = detail || t("keepPageOpen");
     }
 
+    function setDownloadBusy(busy) {
+      downloadActive = busy;
+      if (busy) clearError();
+      result.classList.toggle("is-downloading", busy);
+      cancelDownload.classList.toggle("visible", busy);
+      [input, pasteButton, analyzeButton, batchInput, batchPasteButton, batchAnalyzeButton, singleModeButton, batchModeButton]
+        .forEach(control => { control.disabled = busy; });
+    }
+
+    function reportDownloadFailure(message, quiet = false) {
+      failDownloadProgress(message);
+      if (quiet) return;
+      if (batchPanel.classList.contains("visible")) showBatchMessage(message, true);
+      else showError(message);
+    }
+
     function failDownloadProgress(message) {
       downloadProgress.classList.add("visible", "error");
       progressStage.textContent = t("downloadFailed");
@@ -1523,7 +1552,7 @@
         preparedCleanupTimer = null;
       }
       if (preparedDownload) {
-        URL.revokeObjectURL(preparedDownload.objectUrl);
+        if (preparedDownload.objectUrl) URL.revokeObjectURL(preparedDownload.objectUrl);
         preparedDownload.cleanup();
         preparedDownload = null;
       }
@@ -1576,6 +1605,24 @@
       if (!preparedDownload) return;
       const currentDownload = preparedDownload;
       const filename = selectedFilename(currentDownload);
+
+      if (currentDownload.url) {
+        // A normal browser download keeps going in the background and can
+        // resume after the screen turns off.
+        const link = document.createElement("a");
+        link.href = `${currentDownload.url}?name=${encodeURIComponent(filename)}`;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        currentDownload.saved = true;
+        rememberJob(null);
+        closeSaveDialog();
+        updateDownloadProgress(100, t("saveStarted"), t("browserDownloadHint"));
+        schedulePreparedDownloadCleanup(currentDownload);
+        return;
+      }
+
       const fileType = currentDownload.blob.type || "application/octet-stream";
 
       if (typeof window.showSaveFilePicker === "function") {
@@ -1678,22 +1725,10 @@
       };
     }
 
-    async function startDownload(choice, requestConfig = {}) {
-      if (downloadActive) return;
+    async function startStreamDownload(choice, requestConfig = {}) {
       disposePreparedDownload();
-      downloadActive = true;
+      setDownloadBusy(true);
       activeDownloadController = new AbortController();
-      clearError();
-      result.classList.add("is-downloading");
-      cancelDownload.classList.add("visible");
-      input.disabled = true;
-      pasteButton.disabled = true;
-      analyzeButton.disabled = true;
-      batchInput.disabled = true;
-      batchPasteButton.disabled = true;
-      batchAnalyzeButton.disabled = true;
-      singleModeButton.disabled = true;
-      batchModeButton.disabled = true;
       updateDownloadProgress(0, t("preparingChoice", { label: choice.label }), t("connecting"));
 
       let metadata = null;
@@ -1779,26 +1814,159 @@
       } catch (error) {
         if (downloadSink) await downloadSink.discard();
         const wasCancelled = error.name === "AbortError";
-        const message = wasCancelled ? t("downloadCancelled") : (error.message || t("downloadError"));
-        failDownloadProgress(message);
-        if (!wasCancelled) {
-          if (batchPanel.classList.contains("visible")) showBatchMessage(message, true);
-          else showError(message);
+        reportDownloadFailure(wasCancelled ? t("downloadCancelled") : (error.message || t("downloadError")), wasCancelled);
+      } finally {
+        activeDownloadController = null;
+        setDownloadBusy(false);
+      }
+    }
+
+    function rememberJob(job) {
+      try {
+        if (job) localStorage.setItem(jobStorageKey, JSON.stringify({ id: job.id, label: job.label }));
+        else localStorage.removeItem(jobStorageKey);
+      } catch {}
+    }
+
+    function waitForNextPoll(failures) {
+      // Timers are paused while the phone sleeps, so also check as soon as
+      // the page is visible or the network comes back.
+      const delay = failures ? Math.min(10000, 1000 * 2 ** failures) : 1000;
+      return new Promise(resolve => {
+        const done = () => {
+          window.clearTimeout(timer);
+          document.removeEventListener("visibilitychange", onVisible);
+          window.removeEventListener("online", done);
+          resolve();
+        };
+        const onVisible = () => { if (document.visibilityState === "visible") done(); };
+        const timer = window.setTimeout(done, delay);
+        document.addEventListener("visibilitychange", onVisible);
+        window.addEventListener("online", done);
+      });
+    }
+
+    function prepareJobForSaving(job, status) {
+      disposePreparedDownload();
+      preparedDownload = {
+        url: status.file_url,
+        filename: status.filename || "download",
+        cleanup: () => {},
+        saved: false
+      };
+      saveDownload.classList.add("visible");
+      updateDownloadProgress(100, t("fileReady"), t("pressSave", { filename: preparedDownload.filename }));
+      openSaveDialog();
+      job.onPrepared?.(status);
+    }
+
+    async function followJob(job, status) {
+      let failures = 0;
+      while (activeJob === job) {
+        if (status?.state === "ready") {
+          prepareJobForSaving(job, status);
+          return;
+        }
+        if (status?.state === "error") throw new Error(status.error || t("processingFailed"));
+        if (status) updateDownloadProgress(status.percent, status.phase, status.detail);
+        else progressDetail.textContent = t("waitingForConnection");
+
+        await waitForNextPoll(failures);
+        if (activeJob !== job) return;
+        try {
+          const response = await fetch(`/api/jobs/${encodeURIComponent(job.id)}`, { cache: "no-store" });
+          const payload = await response.json().catch(() => ({}));
+          if (activeJob !== job) return;
+          if (response.status === 404) throw Object.assign(new Error(payload.error || t("processingFailed")), { fatal: true });
+          if (!response.ok) throw new Error(payload.error || t("processingFailed"));
+          status = payload;
+          failures = 0;
+        } catch (error) {
+          if (error.fatal) throw error;
+          // Expected while the phone sleeps or switches networks.
+          status = null;
+          failures += 1;
+        }
+      }
+    }
+
+    async function runJob(job, status) {
+      activeJob = job;
+      rememberJob(job);
+      setDownloadBusy(true);
+      progressNote.hidden = false;
+      try {
+        await followJob(job, status);
+      } catch (error) {
+        if (activeJob === job) {
+          rememberJob(null);
+          reportDownloadFailure(error.message || t("downloadError"));
         }
       } finally {
-        downloadActive = false;
-        activeDownloadController = null;
-        cancelDownload.classList.remove("visible");
-        result.classList.remove("is-downloading");
-        input.disabled = false;
-        pasteButton.disabled = false;
-        analyzeButton.disabled = false;
-        batchInput.disabled = false;
-        batchPasteButton.disabled = false;
-        batchAnalyzeButton.disabled = false;
-        singleModeButton.disabled = false;
-        batchModeButton.disabled = false;
+        if (activeJob === job) {
+          activeJob = null;
+          progressNote.hidden = true;
+          setDownloadBusy(false);
+        }
       }
+    }
+
+    function cancelActiveDownload() {
+      if (!activeJob) {
+        activeDownloadController?.abort();
+        return;
+      }
+      const job = activeJob;
+      activeJob = null;
+      rememberJob(null);
+      fetch(`/api/jobs/${encodeURIComponent(job.id)}`, { method: "DELETE" }).catch(() => {});
+      progressNote.hidden = true;
+      failDownloadProgress(t("downloadCancelled"));
+      setDownloadBusy(false);
+    }
+
+    async function startDownload(choice, requestConfig = {}) {
+      if (downloadActive) return;
+      if (!backgroundJobs) return startStreamDownload(choice, requestConfig);
+      disposePreparedDownload();
+      setDownloadBusy(true);
+      updateDownloadProgress(0, t("preparingChoice", { label: choice.label }), t("connecting"));
+      let started = null;
+      activeDownloadController = new AbortController();
+      try {
+        const response = await fetch(requestConfig.jobUrl || choice.download_url, {
+          method: "POST",
+          ...(requestConfig.options || {}),
+          signal: activeDownloadController.signal
+        });
+        started = await response.json().catch(() => ({}));
+        if (!response.ok || !started.job) throw new Error(started.error || t("cannotStart"));
+      } catch (error) {
+        const wasCancelled = error.name === "AbortError";
+        reportDownloadFailure(wasCancelled ? t("downloadCancelled") : (error.message || t("cannotStart")), wasCancelled);
+        setDownloadBusy(false);
+        return;
+      } finally {
+        activeDownloadController = null;
+      }
+      await runJob({ id: started.job, label: choice.label, onPrepared: requestConfig.onPrepared }, started);
+    }
+
+    async function resumeRememberedJob() {
+      if (!backgroundJobs || downloadActive) return;
+      let job = null;
+      try { job = JSON.parse(localStorage.getItem(jobStorageKey) || "null"); } catch {}
+      if (!job?.id) return;
+      try {
+        const response = await fetch(`/api/jobs/${encodeURIComponent(job.id)}`, { cache: "no-store" });
+        if (!response.ok) {
+          rememberJob(null);
+          return;
+        }
+        const status = await response.json();
+        if (downloadActive) return;
+        await runJob({ id: job.id, label: job.label }, status);
+      } catch {}
     }
 
     function renderChoices(kind) {
@@ -2137,6 +2305,7 @@
         { label: t("packageLabel", { number: packageNumber }) },
         {
           url: "/api/batch/download?progress=1",
+          jobUrl: "/api/batch/download?job=1",
           options: {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -2183,7 +2352,7 @@
     document.querySelectorAll(".tab").forEach(tab => {
       tab.addEventListener("click", () => renderChoices(tab.dataset.kind));
     });
-    cancelDownload.addEventListener("click", () => activeDownloadController?.abort());
+    cancelDownload.addEventListener("click", cancelActiveDownload);
     saveDownload.addEventListener("click", openSaveDialog);
     confirmSaveDownload.addEventListener("click", savePreparedDownload);
     closeSaveDialogButton.addEventListener("click", closeSaveDialog);
@@ -2234,6 +2403,7 @@
     let savedLanguage = "id";
     try { savedLanguage = localStorage.getItem("linkdrop-language") || "id"; } catch {}
     applyLanguage(savedLanguage);
+    resumeRememberedJob();
   </script>
 </body>
 </html>

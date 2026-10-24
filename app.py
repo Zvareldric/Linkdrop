@@ -29,7 +29,7 @@ import yt_dlp.cookies as ytdlp_cookies
 from yt_dlp.extractor.instagram import InstagramIE
 from yt_dlp.extractor.twitter import TwitterIE
 from yt_dlp.utils import ExtractorError
-from flask import Flask, Response, jsonify, render_template, request, stream_with_context
+from flask import Flask, Response, jsonify, render_template, request, send_file, stream_with_context
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from werkzeug.utils import secure_filename
 
@@ -1877,6 +1877,149 @@ def _stream_progress_download(
     return response
 
 
+# Background jobs keep working while the phone sleeps or the tab is in the
+# background: the browser only polls for status and then fetches the finished
+# file with a plain download that the browser's download manager can resume.
+# Jobs live in this process, so they need one long-lived server process
+# (gunicorn --workers 1); serverless deployments keep the streaming flow.
+BACKGROUND_JOBS = not IS_VERCEL
+JOB_RESULT_TTL = int(os.environ.get("JOB_RESULT_TTL", 60 * 60))
+MAX_ACTIVE_JOBS = max(1, int(os.environ.get("MAX_ACTIVE_JOBS", 4)))
+JOB_FOLDER_PREFIX = "linkdrop-job-"
+JOB_NOT_FOUND = (
+    "Proses unduhan tidak ditemukan. Mungkin sudah kedaluwarsa atau server baru dimulai ulang. "
+    "Silakan unduh lagi."
+)
+
+
+class _DownloadJob:
+    def __init__(self):
+        self.id = secrets.token_urlsafe(18)
+        self.folder = Path(tempfile.mkdtemp(prefix=JOB_FOLDER_PREFIX, dir=WORK_DIR))
+        self.cancelled = threading.Event()
+        self.state = "running"
+        self.progress = {"percent": 0, "phase": "Memulai unduhan", "detail": "Menghubungi platform sumber…"}
+        self.error: str | None = None
+        self.path: Path | None = None
+        self.finished_at: float | None = None
+        self.thread: threading.Thread | None = None
+
+    @property
+    def filename(self) -> str:
+        return secure_filename(self.path.name) or "download"
+
+    def status(self) -> dict:
+        status = {"state": self.state, **self.progress}
+        if self.state == "ready":
+            status.update({
+                "percent": 100,
+                "filename": self.filename,
+                "size": self.path.stat().st_size,
+                "file_url": f"/api/jobs/{self.id}/file",
+            })
+        elif self.state == "error":
+            status["error"] = self.error
+        return status
+
+
+_jobs: dict[str, _DownloadJob] = {}
+_jobs_lock = threading.Lock()
+
+
+def _discard_job(job: _DownloadJob) -> None:
+    job.cancelled.set()
+    with _jobs_lock:
+        _jobs.pop(job.id, None)
+    if job.thread and job.thread.is_alive():
+        threading.Thread(
+            target=_remove_after_thread, args=(job.thread, job.folder), name="linkdrop-cleanup", daemon=True,
+        ).start()
+    else:
+        shutil.rmtree(job.folder, ignore_errors=True)
+
+
+def _expire_jobs() -> None:
+    deadline = time.monotonic() - JOB_RESULT_TTL
+    with _jobs_lock:
+        expired = [job for job in _jobs.values() if job.finished_at is not None and job.finished_at < deadline]
+    for job in expired:
+        _discard_job(job)
+
+
+def _get_job(job_id: str) -> _DownloadJob | None:
+    _expire_jobs()
+    with _jobs_lock:
+        return _jobs.get(job_id)
+
+
+def _start_job(
+    payload: dict | None = None,
+    batch_payloads: list[dict] | None = None,
+    package_number: int = 1,
+) -> _DownloadJob:
+    _expire_jobs()
+    with _jobs_lock:
+        if sum(job.state == "running" for job in _jobs.values()) >= MAX_ACTIVE_JOBS:
+            raise UserFacingError("Server sedang memproses banyak unduhan. Coba lagi sebentar lagi.")
+        job = _DownloadJob()
+        _jobs[job.id] = job
+
+    def report(event):
+        if job.cancelled.is_set():
+            raise UserFacingError("Unduhan dibatalkan.")
+        job.progress = event
+
+    def worker():
+        try:
+            if batch_payloads is not None:
+                result = _download_batch(batch_payloads, job.folder, package_number, report, job.cancelled)
+            else:
+                result = _download_with_retry(payload, job.folder, report, job.cancelled)
+            job.path = result
+            job.finished_at = time.monotonic()
+            job.state = "ready"
+        except Exception as exc:
+            if not job.cancelled.is_set():
+                app.logger.warning("Background download failed: %s", exc)
+            shutil.rmtree(job.folder, ignore_errors=True)
+            job.error = _friendly_error(exc)
+            job.finished_at = time.monotonic()
+            job.state = "error"
+
+    job.thread = threading.Thread(target=worker, name="linkdrop-job", daemon=True)
+    job.thread.start()
+    return job
+
+
+def _job_started_response(job: _DownloadJob):
+    response = jsonify({"job": job.id, **job.status()})
+    response.status_code = 202
+    response.headers["Cache-Control"] = "private, no-store, max-age=0"
+    return response
+
+
+def _download_name(requested: str | None, fallback: str) -> str:
+    """Keep the name the user typed, but never let it change the file type."""
+
+    name = re.sub(r'[\x00-\x1f\x7f/\\:*?"<>|]', "-", (requested or "").strip())[:200].strip(" .")
+    if not name:
+        return fallback
+    suffix = Path(fallback).suffix
+    if suffix and not name.lower().endswith(suffix.lower()):
+        name += suffix
+    return name
+
+
+def _remove_stale_job_folders() -> None:
+    # Jobs do not survive a restart, so their files are orphaned.
+    for folder in WORK_DIR.glob(f"{JOB_FOLDER_PREFIX}*"):
+        shutil.rmtree(folder, ignore_errors=True)
+
+
+if BACKGROUND_JOBS:
+    _remove_stale_job_folders()
+
+
 def _stream_file(path: Path, cleanup_folder: Path) -> Response:
     filename = secure_filename(path.name) or "download"
     content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
@@ -2032,6 +2175,7 @@ def index():
         batch_limit_bytes=_batch_storage_limit(),
         batch_warning_items=BATCH_WARNING_ITEMS,
         max_batch_items=MAX_BATCH_ITEMS,
+        background_jobs=BACKGROUND_JOBS,
     )
 
 
@@ -2062,7 +2206,7 @@ def media_info():
         return jsonify({"error": _friendly_error(exc)}), 422
 
 
-@app.get("/api/download/<token>")
+@app.route("/api/download/<token>", methods=["GET", "POST"])
 def download(token: str):
     try:
         payload = _decode_download_token(token)
@@ -2079,6 +2223,13 @@ def download(token: str):
     except Exception as exc:
         return jsonify({"error": _friendly_error(exc)}), 422
 
+    if request.method == "POST":
+        if not BACKGROUND_JOBS:
+            return _error_response("Unduhan di latar belakang tidak tersedia di server ini.", 404)
+        try:
+            return _job_started_response(_start_job(payload))
+        except Exception as exc:
+            return _error_response(_friendly_error(exc), 503)
     if request.args.get("progress") == "1":
         return _stream_progress_download(payload)
 
@@ -2120,7 +2271,53 @@ def batch_download():
     except Exception as exc:
         return jsonify({"error": _friendly_error(exc)}), 422
 
+    if request.args.get("job") == "1":
+        if not BACKGROUND_JOBS:
+            return _error_response("Unduhan di latar belakang tidak tersedia di server ini.", 404)
+        try:
+            return _job_started_response(_start_job(batch_payloads=payloads, package_number=package_number))
+        except Exception as exc:
+            return _error_response(_friendly_error(exc), 503)
     return _stream_progress_download(batch_payloads=payloads, package_number=package_number)
+
+
+@app.get("/api/jobs/<job_id>")
+def job_status(job_id: str):
+    job = _get_job(job_id)
+    if not job:
+        return _error_response(JOB_NOT_FOUND, 404)
+    response = jsonify(job.status())
+    response.headers["Cache-Control"] = "private, no-store, max-age=0"
+    return response
+
+
+@app.get("/api/jobs/<job_id>/file")
+def job_file(job_id: str):
+    job = _get_job(job_id)
+    if not job or job.state != "ready":
+        return _error_response(JOB_NOT_FOUND, 404)
+    filename = job.filename
+    # conditional=True answers Range requests, so an interrupted download
+    # (screen off, network switch) resumes instead of starting over.
+    response = send_file(
+        job.path,
+        mimetype=mimetypes.guess_type(filename)[0] or "application/octet-stream",
+        as_attachment=True,
+        download_name=_download_name(request.args.get("name"), filename),
+        conditional=True,
+        max_age=0,
+    )
+    response.headers["Cache-Control"] = "private, no-cache"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+@app.delete("/api/jobs/<job_id>")
+def cancel_job(job_id: str):
+    job = _get_job(job_id)
+    if job:
+        _discard_job(job)
+    return "", 204
 
 
 if __name__ == "__main__":

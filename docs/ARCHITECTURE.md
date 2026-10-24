@@ -32,15 +32,17 @@ Flask API ─── yt-dlp ─── FFmpeg
 
 ### Media download
 
-1. `GET /api/download/<token>` validates the token and source URL again.
-2. A unique temporary working directory is created.
+1. `POST /api/download/<token>` validates the token and source URL again and starts a background job. The response contains an unguessable job ID.
+2. A unique temporary working directory is created for the job.
 3. yt-dlp downloads the selected source streams.
 4. FFmpeg merges the selected streams and validates MP4 codec compatibility.
 5. VP9, AV1, unsupported pixel formats, and non-AAC audio are converted to H.264/AAC when required for broad device playback.
-6. The result is streamed to browser-managed temporary storage and exposed through a save dialog. The dialog starts with the server-provided filename, permits editing the name, and preserves the original extension before invoking the browser or operating system save flow.
-7. Temporary files are deleted after completion, cancellation, or failure.
+6. The browser polls `GET /api/jobs/<id>` for progress. When the job is ready, a save dialog starts with the server-provided filename, permits editing the name, and preserves the original extension. Saving starts a normal browser download of `GET /api/jobs/<id>/file?name=...`.
+7. `DELETE /api/jobs/<id>` cancels a job. Failed jobs delete their files immediately; finished files are deleted `JOB_RESULT_TTL` seconds (default one hour) after completion, and leftover job folders are removed when the server starts.
 
-When `progress=1` is present, progress frames, metadata, data chunks, and completion status travel in the same response. This keeps the operation bound to one application instance. During quiet phases such as a long conversion, the last progress frame is repeated every 15 seconds so that proxies do not close an idle stream. If the browser disconnects before the work finishes, the temporary directory is removed as soon as the worker stops.
+The job does not depend on the browser connection, so it keeps running when a phone locks its screen, puts the tab in the background, or switches networks. Polling waits quietly while the network is unavailable and checks again as soon as the page is visible. The job ID is kept in `localStorage`, so a reloaded or reopened page picks up the same job. The file endpoint answers HTTP range requests, which lets the browser's download manager resume an interrupted transfer. At most `MAX_ACTIVE_JOBS` (default 4) jobs run at once.
+
+On Vercel, where requests may reach different instances, jobs are disabled. `GET /api/download/<token>?progress=1` is used instead: progress frames, metadata, data chunks, and completion status travel in the same response, and the last progress frame is repeated every 15 seconds so that proxies do not close an idle stream. If the browser disconnects before the work finishes, the temporary directory is removed as soon as the worker stops.
 
 ### Multi-link package
 
@@ -50,13 +52,13 @@ When `progress=1` is present, progress frames, metadata, data chunks, and comple
 4. The server validates every token before processing starts, then processes the selected links with the existing media pipeline, `BATCH_CONCURRENCY` (default 2) at a time.
 5. Successful files are stored without recompression in a flat ZIP. Multi-item galleries are placed in a unique folder in the outer ZIP instead of becoming nested ZIP files; individual failures are written to `linkdrop-report.txt` without stopping other items.
 6. Available disk space is divided by 2.5 and capped by `MAX_MEDIA_BYTES` to reserve room for source, conversion, and archive files.
-7. Each ZIP is streamed with the same framed progress protocol and all temporary data is removed afterward.
+7. Each ZIP is built by a background job (`POST /api/batch/download?job=1`) and saved like a single download. On Vercel it is streamed with the framed progress protocol instead.
 
 ## Design decisions
 
-### Stateless requests
+### In-memory jobs
 
-Linkdrop does not keep a persistent job registry. A short-lived worker thread is scoped to each active progress response, so the browser connection remains the owner of the work and cancellation can clean its temporary directory.
+Linkdrop keeps its job registry in memory and does not persist it. This keeps the deployment simple but requires a single application process (the default `gunicorn --workers 1`), and jobs that are running during a restart are lost; the browser then asks the user to download again.
 
 ### Temporary storage
 

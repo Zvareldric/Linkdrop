@@ -703,6 +703,142 @@ class CleanupTests(unittest.TestCase):
             media_app._run_media_command([sys.executable, "-c", "raise SystemExit(3)"])
 
 
+class BackgroundJobTests(unittest.TestCase):
+    def setUp(self):
+        media_app.app.config.update(TESTING=True)
+        media_app._rate_limiter.reset()
+        self.client = media_app.app.test_client()
+        self.work_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.work_dir.cleanup)
+        for patcher in (
+            patch.object(media_app, "WORK_DIR", Path(self.work_dir.name)),
+            patch.object(media_app, "_jobs", {}),
+            patch("app._validate_public_url", side_effect=lambda url: url),
+        ):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def token(self, url="https://example.com/video"):
+        return media_app._make_token(url, "video", height=720, estimated_bytes=100)
+
+    def wait_for(self, job_id, state):
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            status = self.client.get(f"/api/jobs/{job_id}").get_json()
+            if status.get("state") == state:
+                return status
+            time.sleep(0.02)
+        self.fail(f"job did not reach {state}: {status}")
+
+    def test_job_finishes_without_a_connected_client_and_file_can_be_resumed(self):
+        def make_result(_payload, folder, progress, _cancelled):
+            progress({"percent": 42, "phase": "Mengunduh media", "detail": "1 MB/s"})
+            result = folder / "sample.mp4"
+            result.write_bytes(b"0123456789")
+            return result
+
+        with patch.object(media_app, "_download_with_retry", side_effect=make_result):
+            started = self.client.post(f"/api/download/{self.token()}")
+            self.assertEqual(started.status_code, 202)
+            job_id = started.get_json()["job"]
+            status = self.wait_for(job_id, "ready")
+
+        self.assertEqual(status["filename"], "sample.mp4")
+        self.assertEqual(status["size"], 10)
+        partial = self.client.get(status["file_url"], headers={"Range": "bytes=4-"})
+        self.assertEqual(partial.status_code, 206)
+        self.assertEqual(partial.data, b"456789")
+        full = self.client.get(f"{status['file_url']}?name=Judul%20saya")
+        self.assertEqual(full.data, b"0123456789")
+        self.assertIn("attachment", full.headers["Content-Disposition"])
+        self.assertIn("Judul saya.mp4", full.headers["Content-Disposition"])
+
+    def test_failed_job_reports_error_and_removes_files(self):
+        with patch.object(media_app, "_download_with_retry", side_effect=media_app.UserFacingError("Sumber menolak.")):
+            job_id = self.client.post(f"/api/download/{self.token()}").get_json()["job"]
+            status = self.wait_for(job_id, "error")
+        self.assertEqual(status["error"], "Sumber menolak.")
+        self.assertEqual(list(Path(self.work_dir.name).iterdir()), [])
+        self.assertEqual(self.client.get(f"/api/jobs/{job_id}/file").status_code, 404)
+
+    def test_cancelling_a_job_stops_it_and_removes_files(self):
+        stopped = threading.Event()
+
+        def slow(_payload, _folder, progress, cancelled):
+            while not cancelled.is_set():
+                time.sleep(0.01)
+            stopped.set()
+            raise media_app.UserFacingError("Unduhan dibatalkan.")
+
+        with patch.object(media_app, "_download_with_retry", side_effect=slow):
+            job_id = self.client.post(f"/api/download/{self.token()}").get_json()["job"]
+            self.assertEqual(self.client.delete(f"/api/jobs/{job_id}").status_code, 204)
+            self.assertTrue(stopped.wait(5))
+        self.assertEqual(self.client.get(f"/api/jobs/{job_id}").status_code, 404)
+        deadline = time.monotonic() + 5
+        while any(Path(self.work_dir.name).iterdir()) and time.monotonic() < deadline:
+            time.sleep(0.02)
+        self.assertEqual(list(Path(self.work_dir.name).iterdir()), [])
+
+    def test_finished_jobs_expire(self):
+        def make_result(_payload, folder, _progress, _cancelled):
+            result = folder / "sample.mp4"
+            result.write_bytes(b"x")
+            return result
+
+        with patch.object(media_app, "_download_with_retry", side_effect=make_result):
+            job_id = self.client.post(f"/api/download/{self.token()}").get_json()["job"]
+            self.wait_for(job_id, "ready")
+        with patch.object(media_app, "JOB_RESULT_TTL", -1):
+            response = self.client.get(f"/api/jobs/{job_id}")
+        self.assertEqual(response.status_code, 404)
+        self.assertIn("kedaluwarsa", response.get_json()["error"])
+        self.assertEqual(list(Path(self.work_dir.name).iterdir()), [])
+
+    def test_too_many_running_jobs_are_refused(self):
+        release = threading.Event()
+        self.addCleanup(release.set)
+
+        def blocked(_payload, folder, _progress, _cancelled):
+            release.wait(5)
+            raise media_app.UserFacingError("selesai")
+
+        with patch.object(media_app, "MAX_ACTIVE_JOBS", 1), \
+                patch.object(media_app, "_download_with_retry", side_effect=blocked):
+            self.assertEqual(self.client.post(f"/api/download/{self.token()}").status_code, 202)
+            refused = self.client.post(f"/api/download/{self.token()}")
+        self.assertEqual(refused.status_code, 503)
+        self.assertIn("banyak unduhan", refused.get_json()["error"])
+
+    def test_batch_package_can_run_as_job(self):
+        def make_zip(payloads, folder, package_number, _progress, _cancelled):
+            self.assertEqual(len(payloads), 2)
+            result = folder / f"linkdrop-part-{package_number}.zip"
+            result.write_bytes(b"zip")
+            return result
+
+        with patch.object(media_app, "_download_batch", side_effect=make_zip):
+            started = self.client.post("/api/batch/download?job=1", json={
+                "tokens": [self.token("https://example.com/a"), self.token("https://example.com/b")],
+                "package": 3,
+            })
+            self.assertEqual(started.status_code, 202)
+            status = self.wait_for(started.get_json()["job"], "ready")
+        self.assertEqual(status["filename"], "linkdrop-part-3.zip")
+
+    def test_unknown_job_is_not_found(self):
+        self.assertEqual(self.client.get("/api/jobs/unknown").status_code, 404)
+        self.assertEqual(self.client.get("/api/jobs/unknown/file").status_code, 404)
+        self.assertEqual(self.client.delete("/api/jobs/unknown").status_code, 204)
+
+    def test_download_name_keeps_the_file_type(self):
+        self.assertEqual(media_app._download_name("Lagu: favorit/baru", "a.mp3"), "Lagu- favorit-baru.mp3")
+        self.assertEqual(media_app._download_name("klip.mp4", "a.mp4"), "klip.mp4")
+        self.assertEqual(media_app._download_name("video.exe", "a.mp4"), "video.exe.mp4")
+        self.assertEqual(media_app._download_name("  ", "a.mp4"), "a.mp4")
+        self.assertEqual(media_app._download_name(None, "a.mp4"), "a.mp4")
+
+
 class AccessControlTests(unittest.TestCase):
     def setUp(self):
         media_app.app.config.update(TESTING=True)

@@ -142,7 +142,7 @@ Biasanya perangkat pengguna belum tersambung ke Tailscale, masuk ke tailnet yang
 
 ### Halaman terbuka tetapi download berhenti
 
-Biarkan halaman browser tetap terbuka dan cegah komputer host masuk ke mode sleep. Sumber VP9 atau AV1 beresolusi tinggi memerlukan konversi kompatibilitas H.264, sehingga progres dapat berada pada tahap pemrosesan selama beberapa waktu.
+HP boleh mengunci layar atau berpindah aplikasi: proses tetap berjalan di komputer host, dan halaman akan menyusul saat dibuka kembali. Komputer host sendiri harus tetap menyala dan tersambung. Sumber VP9 atau AV1 beresolusi tinggi memerlukan konversi kompatibilitas H.264, sehingga progres dapat berada pada tahap pemrosesan selama beberapa waktu. File yang sudah selesai tersedia selama satu jam.
 
 ### Video lama tidak dapat diputar
 
