@@ -1304,6 +1304,93 @@ class OriginalQualityTests(unittest.TestCase):
             self.assertEqual(stream["disposition"]["default"], 1)
 
 
+class ServerLimitChoiceTests(unittest.TestCase):
+    url = "https://www.youtube.com/watch?v=abc123"
+    # Eleven minutes, like a long review video: H.264 up to 720p, VP9 above it.
+    info = {
+        "title": "Long video",
+        "duration": 654,
+        "formats": [
+            {"format_id": "136", "height": 720, "width": 1280, "fps": 30, "ext": "mp4",
+             "vcodec": "avc1.4d401f", "acodec": "none", "filesize": 60_000_000},
+            {"format_id": "137", "height": 1080, "width": 1920, "fps": 30, "ext": "mp4",
+             "vcodec": "avc1.640028", "acodec": "none", "filesize": 300_000_000},
+            {"format_id": "271", "height": 1440, "width": 2560, "fps": 30, "ext": "webm",
+             "vcodec": "vp9", "acodec": "none", "filesize": 150_000_000},
+            {"format_id": "140", "vcodec": "none", "acodec": "mp4a.40.2", "abr": 128, "ext": "m4a",
+             "filesize": 10_000_000},
+        ],
+    }
+
+    def build(self, max_bytes=220 * 1024 * 1024, time_limit=240):
+        hidden = {}
+        with patch.object(media_app, "MAX_MEDIA_BYTES", max_bytes), \
+                patch.object(media_app, "TRANSCODE_TIME_LIMIT", time_limit), \
+                patch.object(media_app, "TRANSCODE_PIXEL_RATE", 15_000_000):
+            choices = media_app._build_choices(self.url, self.info, hidden)
+        return choices, hidden
+
+    def test_choices_that_cannot_finish_are_hidden_with_reasons(self):
+        choices, hidden = self.build()
+
+        self.assertEqual([choice["label"] for choice in choices["video"]], ["720p"])
+        self.assertEqual(hidden["video"], [
+            {"label": "1080p", "reason": "too_large"},
+            {"label": "1440p", "reason": "too_slow"},
+        ])
+        self.assertNotIn("audio", hidden)
+
+    def test_short_conversions_stay_available(self):
+        info = {**self.info, "duration": 20}
+        hidden = {}
+        with patch.object(media_app, "TRANSCODE_TIME_LIMIT", 240), \
+                patch.object(media_app, "TRANSCODE_PIXEL_RATE", 15_000_000):
+            video = media_app._build_choices(self.url, info, hidden)["video"]
+
+        self.assertIn("1440p", [choice["label"] for choice in video])
+        self.assertEqual(hidden, {})
+
+    def test_conversion_limit_is_off_when_zero(self):
+        choices, hidden = self.build(max_bytes=2048 * 1024 * 1024, time_limit=0)
+
+        self.assertEqual([choice["label"] for choice in choices["video"]], ["720p", "1080p", "1440p"])
+        self.assertEqual(hidden, {})
+
+    def test_unknown_size_or_duration_is_not_hidden(self):
+        info = {**self.info, "duration": None, "formats": [
+            {"format_id": "271", "height": 1440, "vcodec": "vp9", "acodec": "none", "ext": "webm"},
+        ]}
+        hidden = {}
+        with patch.object(media_app, "TRANSCODE_TIME_LIMIT", 240):
+            video = media_app._build_choices(self.url, info, hidden)["video"]
+
+        self.assertEqual([choice["label"] for choice in video], ["1440p"])
+        self.assertEqual(hidden, {})
+
+    def test_oversized_audio_is_hidden(self):
+        choices, hidden = self.build(max_bytes=12_000_000, time_limit=0)
+
+        self.assertEqual([choice["label"] for choice in choices["audio"]], ["Audio asli", "MP3 128 kbps"])
+        self.assertEqual([item["label"] for item in hidden["audio"]], ["MP3 192 kbps", "MP3 320 kbps"])
+
+    def test_info_response_reports_hidden_choices(self):
+        with patch.object(media_app, "TRANSCODE_TIME_LIMIT", 240), \
+                patch.object(media_app, "TRANSCODE_PIXEL_RATE", 15_000_000), \
+                patch.object(media_app, "MAX_MEDIA_BYTES", 220 * 1024 * 1024):
+            payload = media_app._media_payload(self.url, self.info)
+
+        self.assertEqual([item["label"] for item in payload["hidden_choices"]["video"]], ["1080p", "1440p"])
+
+    def test_estimated_transcode_time_uses_source_dimensions(self):
+        with patch.object(media_app, "TRANSCODE_PIXEL_RATE", 16_000_000):
+            seconds = media_app._estimated_transcode_seconds(
+                [{"height": 1440, "width": 2560, "fps": 25, "vcodec": "vp9"}], 1440, 213,
+            )
+
+        # The measured Vercel run converted this video at about 0.18x real time.
+        self.assertAlmostEqual(seconds, 213 / 0.18, delta=60)
+
+
 class ParallelDownloadTests(unittest.TestCase):
     def test_byte_budget_is_shared(self):
         budget = media_app._ByteBudget(10)

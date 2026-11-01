@@ -729,6 +729,8 @@
     .subtitle-option[aria-pressed="true"] { color: white; background: var(--ink); border-color: var(--ink); }
     .subtitle-hint { color: var(--muted); font-size: 11px; line-height: 1.45; }
     .subtitle-mode { display: grid; gap: 8px; padding-top: 4px; }
+    .choices-note { margin: 11px 2px 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+    .choices-note[hidden] { display: none; }
     .subtitle-mode[hidden] { display: none; }
 
     .choices {
@@ -1178,6 +1180,7 @@
             <small class="subtitle-hint" id="subtitleHint"></small>
           </div>
           <div class="choices" id="choices"></div>
+          <p class="choices-note" id="choicesNote" hidden></p>
         </div>
       </div>
       </div>
@@ -1364,7 +1367,8 @@
         subtitleBurnUnavailable: "Pilihan “Selalu tampil” tidak tersedia di server ini karena FFmpeg-nya dibuat tanpa libass.",
         subtitleSoftHint: "Subtitle bisa dinyalakan atau dimatikan dari pemutar video. Kualitas video tetap asli dan prosesnya cepat. Sebagian galeri Android tidak menampilkannya; pilih “Selalu tampil” jika perlu.",
         subtitleBurnHint: "Subtitle menyatu dengan gambar sehingga selalu terlihat di pemutar mana pun. Prosesnya lebih lama dan kualitas video sedikit turun.",
-        withSubtitle: "{label} + subtitle {language}", withBurnedSubtitle: "{label} + subtitle {language} (selalu tampil)"
+        withSubtitle: "{label} + subtitle {language}", withBurnedSubtitle: "{label} + subtitle {language} (selalu tampil)",
+        hiddenTooLarge: "{labels} tidak ditampilkan karena melebihi batas {mb} MB server ini.", hiddenTooSlow: "{labels} tidak ditampilkan karena konversinya terlalu lama untuk server ini.", hiddenLocalHint: "Jalankan Linkdrop di komputer sendiri untuk semua pilihan."
       },
       en: {
         publicMedia: "Public media", languageChoice: "Language selection", kicker: "Download media in its real quality!",
@@ -1397,7 +1401,8 @@
         subtitleBurnUnavailable: "“Always shown” is not available on this server because its FFmpeg was built without libass.",
         subtitleSoftHint: "Subtitles can be turned on or off in the video player. The video keeps its original quality and is ready quickly. Some Android gallery apps do not show them; choose “Always shown” if needed.",
         subtitleBurnHint: "Subtitles become part of the picture, so they are visible in every player. This takes longer and slightly lowers video quality.",
-        withSubtitle: "{label} + {language} subtitles", withBurnedSubtitle: "{label} + {language} subtitles (always shown)"
+        withSubtitle: "{label} + {language} subtitles", withBurnedSubtitle: "{label} + {language} subtitles (always shown)",
+        hiddenTooLarge: "{labels} hidden because they exceed this server's {mb} MB limit.", hiddenTooSlow: "{labels} hidden because converting them takes too long on this server.", hiddenLocalHint: "Run Linkdrop on your own computer for every option."
       }
     };
     let currentLanguage = "id";
@@ -1498,6 +1503,26 @@
 
     function availableKinds() {
       return ["video", "audio", "photo"].filter(kind => (mediaData?.choices?.[kind] || []).length);
+    }
+
+    // Kinds whose options were all hidden by the server still get a tab, so the
+    // note can explain why nothing is offered there.
+    function visibleKinds() {
+      return ["video", "audio", "photo"].filter(kind =>
+        (mediaData?.choices?.[kind] || []).length || (mediaData?.hidden_choices?.[kind] || []).length
+      );
+    }
+
+    function renderHiddenNote(kind) {
+      const note = document.getElementById("choicesNote");
+      const hidden = mediaData?.hidden_choices?.[kind] || [];
+      const labels = reason => hidden.filter(item => item.reason === reason).map(item => item.label).join(", ");
+      const lines = [];
+      if (labels("too_large")) lines.push(t("hiddenTooLarge", { labels: labels("too_large"), mb: mediaData?.limits?.max_file_mb }));
+      if (labels("too_slow")) lines.push(t("hiddenTooSlow", { labels: labels("too_slow") }));
+      if (lines.length) lines.push(t("hiddenLocalHint"));
+      note.textContent = lines.join(" ");
+      note.hidden = !lines.length;
     }
 
     function prettyBytes(value) {
@@ -2002,6 +2027,7 @@
       choicesBox.replaceChildren();
 
       renderSubtitles();
+      renderHiddenNote(kind);
       (mediaData.choices[kind] || []).map(withSelectedSubtitle).forEach(choice => {
         const link = document.createElement("a");
         link.className = "choice";
@@ -2094,11 +2120,11 @@
       const metadata = [data.uploader, formatDuration(data.duration), data.item_count > 1 ? `${data.item_count} ${currentLanguage === "en" ? "items" : "item"}` : null].filter(Boolean);
       document.getElementById("mediaMeta").textContent = metadata.join(" · ") || t("formatReady");
 
-      const kinds = availableKinds();
+      const kinds = visibleKinds();
       document.querySelectorAll(".tab").forEach(tab => {
         tab.disabled = !kinds.includes(tab.dataset.kind);
       });
-      activeKind = kinds[0] || "video";
+      activeKind = availableKinds()[0] || kinds[0] || "video";
       renderChoices(activeKind);
       result.classList.remove("is-visible");
       result.style.display = "grid";
