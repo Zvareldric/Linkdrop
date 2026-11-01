@@ -29,7 +29,7 @@ import yt_dlp.cookies as ytdlp_cookies
 from yt_dlp.extractor.instagram import InstagramIE
 from yt_dlp.extractor.twitter import TwitterIE
 from yt_dlp.utils import ExtractorError
-from flask import Flask, Response, jsonify, render_template, request, send_file, stream_with_context
+from flask import Flask, Response, g, jsonify, redirect, render_template, request, send_file, stream_with_context
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from werkzeug.utils import secure_filename
 
@@ -73,6 +73,9 @@ ACCESS_USERNAME = os.environ.get("ACCESS_USERNAME", "linkdrop").strip() or "link
 ACCESS_PASSWORD = os.environ.get("ACCESS_PASSWORD", "").strip()
 TRUSTED_PROXY_HEADER = os.environ.get("TRUSTED_PROXY_HEADER", "").strip()
 FAILED_LOGIN_LIMIT = (10, 10 * 60)
+# Days a browser stays signed in after entering ACCESS_PASSWORD once.
+ACCESS_SESSION_DAYS = max(1, int(os.environ.get("ACCESS_SESSION_DAYS", 30)))
+SESSION_COOKIE = "linkdrop_session"
 
 WORK_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -88,6 +91,7 @@ def _token_secret_for_runtime(configured_secret: str, is_vercel: bool) -> str:
 _configured_token_secret = os.environ.get("DOWNLOAD_TOKEN_SECRET", "").strip()
 _token_secret = _token_secret_for_runtime(_configured_token_secret, IS_VERCEL)
 _signer = URLSafeTimedSerializer(_token_secret, salt="linkdrop-download-v1")
+_session_signer = URLSafeTimedSerializer(_token_secret, salt="linkdrop-session-v1")
 
 
 def _parse_rate_limit(value: str) -> tuple[int, int] | None:
@@ -2169,18 +2173,81 @@ def _error_response(message: str, status: int, retry_after: int | None = None):
     return response
 
 
+def _password_matches(password: str) -> bool:
+    return hmac.compare_digest(password.encode("utf-8"), ACCESS_PASSWORD.encode("utf-8"))
+
+
 def _has_valid_credentials() -> bool:
+    """Accept HTTP Basic credentials, which scripts and older clients still send."""
+
     auth = request.authorization
     if not auth or auth.type != "basic":
         return False
     username_ok = hmac.compare_digest((auth.username or "").encode("utf-8"), ACCESS_USERNAME.encode("utf-8"))
-    password_ok = hmac.compare_digest((auth.password or "").encode("utf-8"), ACCESS_PASSWORD.encode("utf-8"))
-    return username_ok and password_ok
+    return username_ok and _password_matches(auth.password or "")
+
+
+def _session_fingerprint() -> str:
+    """Tie sign-in cookies to the current password, so changing it signs everyone out.
+
+    The password itself never goes into the cookie, only a keyed hash of it.
+    """
+
+    material = f"{ACCESS_USERNAME}\0{ACCESS_PASSWORD}".encode("utf-8")
+    return hmac.new(_token_secret.encode("utf-8"), material, "sha256").hexdigest()[:32]
+
+
+def _has_valid_session() -> bool:
+    value = request.cookies.get(SESSION_COOKIE)
+    if not value:
+        return False
+    try:
+        data, issued_at = _session_signer.loads(value, max_age=ACCESS_SESSION_DAYS * 86400, return_timestamp=True)
+    except (BadSignature, SignatureExpired):
+        return False
+    if not isinstance(data, dict) or not hmac.compare_digest(str(data.get("v", "")), _session_fingerprint()):
+        return False
+    # Renew at most once a day, so the sign-in only lapses after
+    # ACCESS_SESSION_DAYS without any visit.
+    g.renew_session = time.time() - issued_at.timestamp() > 86400
+    return True
+
+
+def _set_session_cookie(response):
+    response.set_cookie(
+        SESSION_COOKIE,
+        _session_signer.dumps({"v": _session_fingerprint()}),
+        max_age=ACCESS_SESSION_DAYS * 86400,
+        httponly=True,
+        secure=_is_https_request(),
+        samesite="Lax",
+        path="/",
+    )
+    return response
+
+
+def _is_https_request() -> bool:
+    # Vercel, Tailscale Serve, and Cloudflare Tunnel end HTTPS in front of the
+    # app. The header only decides the cookie's Secure flag, so a forged value
+    # cannot grant access.
+    return request.is_secure or request.headers.get("X-Forwarded-Proto", "").split(",")[0].strip() == "https"
+
+
+def _safe_next_path(value: str | None) -> str:
+    """Return a same-site path to continue to after signing in."""
+
+    if not value or not value.startswith("/") or value.startswith("//") or "\\" in value:
+        return "/"
+    return value
+
+
+def _wants_page() -> bool:
+    return request.method == "GET" and not request.path.startswith("/api/")
 
 
 @app.before_request
 def _access_control():
-    if request.endpoint in {"health", "static"}:
+    if request.endpoint in {"health", "static", "login"}:
         return None
     client = _client_address()
 
@@ -2190,12 +2257,14 @@ def _access_control():
         retry_after = _rate_limiter.retry_after(login_key, limit, window, record=False)
         if retry_after:
             return _error_response("Terlalu banyak percobaan masuk. Coba lagi nanti.", 429, retry_after)
-        if not _has_valid_credentials():
+        if not (_has_valid_session() or _has_valid_credentials()):
             if request.authorization:
                 _rate_limiter.retry_after(login_key, limit, window)
-            response = _error_response("Masukkan nama pengguna dan kata sandi Linkdrop.", 401)
-            response.headers["WWW-Authenticate"] = 'Basic realm="Linkdrop", charset="UTF-8"'
-            return response
+            if _wants_page():
+                return redirect(f"/login?{urlencode({'next': request.full_path.rstrip('?')})}")
+            # No WWW-Authenticate header: it would make the browser show its own
+            # sign-in dialog instead of the Linkdrop sign-in page.
+            return _error_response("Sesi masuk berakhir. Muat ulang halaman untuk masuk lagi.", 401)
 
     bucket = RATE_LIMITED_ENDPOINTS.get(request.endpoint)
     rate_limit = RATE_LIMITS.get(bucket) if bucket else None
@@ -2208,6 +2277,13 @@ def _access_control():
                 retry_after,
             )
     return None
+
+
+@app.after_request
+def _renew_session(response):
+    if g.get("renew_session"):
+        _set_session_cookie(response)
+    return response
 
 
 @app.after_request
@@ -2234,6 +2310,45 @@ def index():
         max_batch_items=MAX_BATCH_ITEMS,
         background_jobs=BACKGROUND_JOBS,
     )
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    next_path = _safe_next_path(request.values.get("next"))
+    if not ACCESS_PASSWORD or _has_valid_session():
+        return redirect(next_path, code=303)
+
+    error = None
+    status = 200
+    if request.method == "POST":
+        login_key = ("failed-login", _client_address())
+        limit, window = FAILED_LOGIN_LIMIT
+        retry_after = _rate_limiter.retry_after(login_key, limit, window, record=False)
+        if retry_after:
+            error = f"Terlalu banyak percobaan. Coba lagi dalam {max(1, round(retry_after / 60))} menit."
+            status = 429
+        elif _password_matches(request.form.get("password", "")):
+            return _set_session_cookie(redirect(next_path, code=303))
+        else:
+            _rate_limiter.retry_after(login_key, limit, window)
+            error = "Kata sandi salah."
+            status = 401
+
+    response = Response(
+        render_template(
+            "login.html",
+            error=error,
+            next_path=next_path,
+            username=ACCESS_USERNAME,
+            session_days=ACCESS_SESSION_DAYS,
+        ),
+        status=status,
+        mimetype="text/html",
+    )
+    response.headers["Cache-Control"] = "no-store"
+    if status == 429:
+        response.headers["Retry-After"] = str(retry_after)
+    return response
 
 
 @app.get("/api/health")

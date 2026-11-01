@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#fff4df">
+  <meta name="robots" content="noindex">
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <title>Masuk — Linkdrop</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #101010;
+      --muted: #62656c;
+      --canvas: #fff4df;
+      --panel: #fffdf8;
+      --line: #181818;
+      --signal: #075cff;
+      --sun: #ffd80c;
+      --danger: #b92f2f;
+      --shadow: 8px 8px 0 rgba(7, 92, 255, .16);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      display: grid;
+      place-items: center;
+      min-height: 100vh;
+      min-height: 100dvh;
+      margin: 0;
+      padding: 24px 16px;
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", ui-sans-serif, sans-serif;
+      background-color: var(--canvas);
+      background-image: radial-gradient(rgba(16, 16, 16, .09) 1px, transparent 1px);
+      background-size: 24px 24px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    main { width: min(100%, 380px); }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 22px;
+    }
+    .brand-symbol { position: relative; top: -3px; width: 22px; height: auto; }
+    .brand-wordmark { width: 116px; height: auto; }
+
+    .card {
+      padding: 26px;
+      background: var(--panel);
+      border: 2px solid var(--line);
+      border-radius: 30px;
+      box-shadow: var(--shadow);
+    }
+
+    h1 { margin: 0 0 6px; font-size: 22px; letter-spacing: -.02em; }
+    .lead { margin: 0 0 20px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+
+    label { display: block; margin: 0 0 10px 2px; font-size: 13px; font-weight: 750; }
+
+    .input-shell {
+      padding: 8px;
+      background: white;
+      border: 2px solid var(--ink);
+      border-radius: 18px;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .input-shell:focus-within { border-color: var(--signal); box-shadow: 0 0 0 4px rgba(7, 92, 255, .16); }
+
+    input[type="password"] {
+      width: 100%;
+      padding: 11px 12px;
+      color: var(--ink);
+      background: transparent;
+      border: 0;
+      outline: 0;
+      font-size: 16px;
+    }
+
+    .username { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+
+    .error {
+      margin: 12px 2px 0;
+      color: var(--danger);
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    button {
+      width: 100%;
+      min-height: 48px;
+      margin-top: 18px;
+      color: white;
+      background: var(--signal);
+      border: 1.5px solid var(--ink);
+      border-radius: 999px;
+      box-shadow: 4px 4px 0 var(--sun);
+      cursor: pointer;
+      font: inherit;
+      font-size: 15px;
+      font-weight: 800;
+      transition: transform .18s, background .18s, box-shadow .18s;
+    }
+    button:hover { background: #004ee0; box-shadow: 6px 6px 0 var(--sun); transform: translateY(-2px); }
+
+    .remember { margin: 16px 2px 0; color: var(--muted); font-size: 12px; line-height: 1.5; text-align: center; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="brand" aria-label="Linkdrop">
+      <img class="brand-symbol" src="/static/mark.svg" alt="">
+      <img class="brand-wordmark" src="/static/wordmark.svg" alt="">
+    </div>
+    <form class="card" method="post" action="/login">
+      <h1>Masuk</h1>
+      <p class="lead">Linkdrop ini dilindungi kata sandi.</p>
+      <input type="hidden" name="next" value="{{ next_path }}">
+      {# Lets password managers save the entry under the right name. #}
+      <input class="username" type="text" name="username" value="{{ username }}" autocomplete="username" tabindex="-1" aria-hidden="true" readonly>
+      <label for="password">Kata sandi</label>
+      <div class="input-shell">
+        <input id="password" type="password" name="password" autocomplete="current-password" required autofocus
+          {% if error %}aria-invalid="true" aria-describedby="loginError"{% endif %}>
+      </div>
+      {% if error %}<p class="error" id="loginError" role="alert">{{ error }}</p>{% endif %}
+      <button type="submit">Masuk</button>
+      <p class="remember">Perangkat ini tetap masuk selama {{ session_days }} hari sejak terakhir dipakai.</p>
+    </form>
+  </main>
+</body>
+</html>

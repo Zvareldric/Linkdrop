@@ -85,8 +85,9 @@ Set these variables before Linkdrop is reachable by people you do not fully trus
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `ACCESS_PASSWORD` | empty (open) | Requires a browser sign-in for every page and API call except `/api/health` and static files. |
-| `ACCESS_USERNAME` | `linkdrop` | Username for the sign-in prompt. |
+| `ACCESS_PASSWORD` | empty (open) | Requires signing in on the Linkdrop sign-in page before any page or API call except `/api/health`, `/login`, and static files. |
+| `ACCESS_SESSION_DAYS` | `30` | Days a browser stays signed in after its last visit. Changing `ACCESS_PASSWORD` signs every browser out. |
+| `ACCESS_USERNAME` | `linkdrop` | Username for HTTP Basic sign-in, which scripts can still use. The sign-in page asks only for the password. |
 | `RATE_LIMIT_INFO` | `30/60` | Link analyses per client address, as `count/seconds`, or `off`. |
 | `RATE_LIMIT_DOWNLOAD` | `20/600` | Single and batch downloads per client address, as `count/seconds`, or `off`. |
 | `TRUSTED_PROXY_HEADER` | empty | Header that carries the client address from a trusted proxy, such as `CF-Connecting-IP` behind Cloudflare. Set it only when the proxy is the sole way to reach Linkdrop. |
@@ -98,7 +99,7 @@ Set these variables before Linkdrop is reachable by people you do not fully trus
 | `GALLERY_CONCURRENCY` | `4` | Carousel items downloaded at the same time. Items are copied as-is, so this mainly uses network bandwidth. |
 | `BATCH_CONCURRENCY` | `2` | Links in a multi-link package processed at the same time. Raise it only with spare CPU and temporary disk, because each item may need a conversion. |
 
-Ten wrong passwords from one address block that address for 10 minutes. Rate-limit counters live in memory, so they reset on restart and assume the default single Gunicorn worker. Serve Linkdrop over HTTPS whenever a password is set, because browser sign-in sends the password with every request.
+Ten wrong passwords from one address block that address for 10 minutes. Rate-limit counters live in memory, so they reset on restart and assume the default single Gunicorn worker. A successful sign-in stores a signed, HTTP-only cookie that holds no password. Its signature uses `DOWNLOAD_TOKEN_SECRET`, so keep that value fixed or every browser has to sign in again after a restart. Serve Linkdrop over HTTPS whenever a password is set, so the password and the cookie travel encrypted.
 
 ## Cookies
 

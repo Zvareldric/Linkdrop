@@ -46,7 +46,7 @@ docker run --detach --name linkdrop --restart unless-stopped \
   linkdrop
 ```
 
-- `ACCESS_PASSWORD` mengaktifkan dialog masuk di browser. Nama penggunanya `linkdrop`, kecuali Anda mengatur `ACCESS_USERNAME`.
+- `ACCESS_PASSWORD` mengaktifkan halaman masuk Linkdrop. Browser yang sudah masuk tetap masuk selama 30 hari sejak terakhir dipakai (`ACCESS_SESSION_DAYS`).
 - `TRUSTED_PROXY_HEADER=CF-Connecting-IP` membuat rate limiter melihat alamat asli setiap pengunjung, bukan alamat lokal `cloudflared`. Atur ini hanya jika Linkdrop semata-mata dapat dijangkau melalui Cloudflare seperti di atas; jika tidak, pengunjung dapat memalsukan header tersebut.
 
 Buka [http://127.0.0.1:5050](http://127.0.0.1:5050) dan pastikan browser meminta nama pengguna dan kata sandi.

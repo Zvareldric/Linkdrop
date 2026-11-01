@@ -1289,6 +1289,18 @@
   </main>
 
   <script>
+    // When the sign-in expires while the page is open, the server answers API
+    // calls with 401. Send the visitor to the sign-in page instead of showing
+    // an error, and come back here afterwards.
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = async (...args) => {
+      const response = await nativeFetch(...args);
+      if (response.status === 401 && new URL(response.url, location.href).origin === location.origin) {
+        location.assign(`/login?next=${encodeURIComponent(location.pathname + location.search)}`);
+      }
+      return response;
+    };
+
     const form = document.getElementById("analyzeForm");
     const input = document.getElementById("urlInput");
     const analyzeButton = document.getElementById("analyzeButton");
