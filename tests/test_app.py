@@ -886,19 +886,106 @@ class AccessControlTests(unittest.TestCase):
     def test_password_protects_pages_but_not_health_check(self):
         with patch.object(media_app, "ACCESS_PASSWORD", "rahasia"):
             anonymous = self.client.get("/")
+            anonymous_api = self.client.post("/api/info", json={"url": "x"})
             health = self.client.get("/api/health")
+            login_page = self.client.get("/login")
             signed_in = self.client.get("/", headers=basic_auth("linkdrop", "rahasia"))
             wrong_user = self.client.get("/", headers=basic_auth("admin", "rahasia"))
-        self.assertEqual(anonymous.status_code, 401)
-        self.assertIn("Basic", anonymous.headers["WWW-Authenticate"])
+        self.assertEqual(anonymous.status_code, 302)
+        self.assertEqual(anonymous.headers["Location"], "/login?next=%2F")
+        self.assertEqual(anonymous_api.status_code, 401)
+        # The browser's own sign-in dialog must not appear.
+        self.assertNotIn("WWW-Authenticate", anonymous_api.headers)
         self.assertEqual(health.status_code, 200)
+        self.assertEqual(login_page.status_code, 200)
+        self.assertIn(b'type="password"', login_page.data)
         self.assertEqual(signed_in.status_code, 200)
-        self.assertEqual(wrong_user.status_code, 401)
+        self.assertEqual(wrong_user.status_code, 302)
+
+    def test_sign_in_sets_a_lasting_session_cookie(self):
+        with patch.object(media_app, "ACCESS_PASSWORD", "rahasia"):
+            response = self.client.post("/login", data={"password": "rahasia", "next": "/?tab=audio"})
+            page = self.client.get("/")
+            api = self.client.post("/api/info", json={})
+        self.assertEqual(response.status_code, 303)
+        self.assertEqual(response.headers["Location"], "/?tab=audio")
+        cookie = response.headers["Set-Cookie"]
+        self.assertIn("linkdrop_session=", cookie)
+        self.assertIn(f"Max-Age={media_app.ACCESS_SESSION_DAYS * 86400}", cookie)
+        self.assertIn("HttpOnly", cookie)
+        self.assertIn("SameSite=Lax", cookie)
+        self.assertNotIn("rahasia", cookie)
+        self.assertEqual(page.status_code, 200)
+        self.assertNotEqual(api.status_code, 401)
+
+    def test_session_cookie_is_secure_behind_https_proxy(self):
+        with patch.object(media_app, "ACCESS_PASSWORD", "rahasia"):
+            plain = self.client.post("/login", data={"password": "rahasia"})
+            proxied = media_app.app.test_client().post(
+                "/login", data={"password": "rahasia"}, headers={"X-Forwarded-Proto": "https"},
+            )
+        self.assertNotIn("Secure", plain.headers["Set-Cookie"])
+        self.assertIn("Secure", proxied.headers["Set-Cookie"])
+
+    def test_wrong_password_shows_error_and_counts_toward_lockout(self):
+        with patch.object(media_app, "ACCESS_PASSWORD", "rahasia"):
+            wrong = self.client.post("/login", data={"password": "salah"})
+            for _ in range(media_app.FAILED_LOGIN_LIMIT[0] - 1):
+                self.client.post("/login", data={"password": "salah"})
+            locked = self.client.post("/login", data={"password": "rahasia"})
+        self.assertEqual(wrong.status_code, 401)
+        self.assertIn("Kata sandi salah.".encode(), wrong.data)
+        self.assertNotIn("Set-Cookie", wrong.headers)
+        self.assertEqual(locked.status_code, 429)
+        self.assertNotIn("Set-Cookie", locked.headers)
+
+    def test_changing_the_password_ends_existing_sessions(self):
+        with patch.object(media_app, "ACCESS_PASSWORD", "lama"):
+            self.client.post("/login", data={"password": "lama"})
+            self.assertEqual(self.client.get("/").status_code, 200)
+        with patch.object(media_app, "ACCESS_PASSWORD", "baru"):
+            self.assertEqual(self.client.get("/").status_code, 302)
+
+    def test_forged_or_expired_session_is_rejected(self):
+        with patch.object(media_app, "ACCESS_PASSWORD", "rahasia"):
+            self.client.set_cookie(media_app.SESSION_COOKIE, "palsu")
+            forged = self.client.get("/")
+            two_days_ago = time.time() - 2 * 86400
+            with patch("itsdangerous.timed.time.time", return_value=two_days_ago):
+                self.client.post("/login", data={"password": "rahasia"})
+            with patch.object(media_app, "ACCESS_SESSION_DAYS", 1):
+                expired = self.client.get("/")
+        self.assertEqual(forged.status_code, 302)
+        self.assertEqual(expired.status_code, 302)
+
+    def test_old_session_is_renewed_on_use(self):
+        with patch.object(media_app, "ACCESS_PASSWORD", "rahasia"):
+            two_days_ago = time.time() - 2 * 86400
+            with patch("itsdangerous.timed.time.time", return_value=two_days_ago):
+                self.client.post("/login", data={"password": "rahasia"})
+            renewed = self.client.get("/")
+            fresh = self.client.get("/")
+        self.assertEqual(renewed.status_code, 200)
+        self.assertIn("linkdrop_session=", renewed.headers.get("Set-Cookie", ""))
+        self.assertNotIn("Set-Cookie", fresh.headers)
+
+    def test_sign_in_only_returns_to_paths_on_this_site(self):
+        for target in ("https://evil.example", "//evil.example", "/\\evil.example", "javascript:alert(1)"):
+            self.assertEqual(media_app._safe_next_path(target), "/")
+        self.assertEqual(media_app._safe_next_path("/?tab=audio"), "/?tab=audio")
+
+    def test_signed_in_visitor_skips_the_login_page(self):
+        with patch.object(media_app, "ACCESS_PASSWORD", "rahasia"):
+            self.client.post("/login", data={"password": "rahasia"})
+            response = self.client.get("/login?next=/")
+        self.assertEqual(response.status_code, 303)
+        self.assertEqual(response.headers["Location"], "/")
 
     def test_repeated_wrong_passwords_lock_out_even_the_right_one(self):
         with patch.object(media_app, "ACCESS_PASSWORD", "rahasia"):
             for _ in range(media_app.FAILED_LOGIN_LIMIT[0]):
-                self.assertEqual(self.client.get("/", headers=basic_auth("linkdrop", "salah")).status_code, 401)
+                wrong = self.client.post("/api/info", json={}, headers=basic_auth("linkdrop", "salah"))
+                self.assertEqual(wrong.status_code, 401)
             locked = self.client.get("/", headers=basic_auth("linkdrop", "rahasia"))
         self.assertEqual(locked.status_code, 429)
         self.assertIn("Retry-After", locked.headers)

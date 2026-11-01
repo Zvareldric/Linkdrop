@@ -46,7 +46,7 @@ docker run --detach --name linkdrop --restart unless-stopped \
   linkdrop
 ```
 
-- `ACCESS_PASSWORD` turns on the browser sign-in prompt. The username is `linkdrop` unless you set `ACCESS_USERNAME`.
+- `ACCESS_PASSWORD` turns on the Linkdrop sign-in page. A browser that signs in stays signed in for 30 days after its last visit (`ACCESS_SESSION_DAYS`).
 - `TRUSTED_PROXY_HEADER=CF-Connecting-IP` lets the rate limiter see each visitor's real address instead of `cloudflared`'s local address. Set it only when Linkdrop is reachable exclusively through Cloudflare, as above; otherwise visitors could forge the header.
 
 Open [http://127.0.0.1:5050](http://127.0.0.1:5050) and confirm that the browser asks for the username and password.
