@@ -70,6 +70,13 @@ HTTP_TIMEOUT=30
 
 Do not raise `MAX_MEDIA_BYTES` beyond the runtime's available scratch space.
 
+Vercel stops a function after 300 seconds on the Hobby plan, and one vCPU converts VP9 or AV1 to H.264 slowly: a 2560×1440 video at 25 fps converted at about 0.18× real time in a measured run. Linkdrop therefore hides choices that cannot finish on the server and explains why below the list:
+
+- Choices whose estimated size is above `MAX_MEDIA_BYTES`. This applies on every server.
+- Choices that need a conversion longer than `TRANSCODE_TIME_LIMIT` seconds (default `240` on Vercel, `0`, meaning no limit, elsewhere). The estimate is width × height × frame rate × duration divided by `TRANSCODE_PIXEL_RATE` (default `15000000` pixels per second).
+
+On the Pro plan, where functions can run longer, raise `TRANSCODE_TIME_LIMIT` to match the configured maximum duration minus about a minute for the download and transfer.
+
 Vercel is not the preferred target for large downloads or high-resolution transcoding. Tailscale is a better fit for personal use, while a persistent container or VM is a better fit for a public multi-user service.
 
 ## Public access controls
@@ -84,6 +91,8 @@ Set these variables before Linkdrop is reachable by people you do not fully trus
 | `RATE_LIMIT_DOWNLOAD` | `20/600` | Single and batch downloads per client address, as `count/seconds`, or `off`. |
 | `TRUSTED_PROXY_HEADER` | empty | Header that carries the client address from a trusted proxy, such as `CF-Connecting-IP` behind Cloudflare. Set it only when the proxy is the sole way to reach Linkdrop. |
 | `FFMPEG_TIMEOUT` | `3600` | Seconds before a compatibility conversion is stopped. |
+| `TRANSCODE_TIME_LIMIT` | `240` on Vercel, otherwise `0` | Hides converted video choices whose estimated conversion takes longer than this many seconds. `0` offers every choice. |
+| `TRANSCODE_PIXEL_RATE` | `15000000` | Pixels per second the server converts, used for that estimate. Raise it on faster CPUs. |
 | `JOB_RESULT_TTL` | `3600` | Seconds a finished file stays on the server so the browser can save or resume it. |
 | `MAX_ACTIVE_JOBS` | `4` | Downloads processed at the same time. Further requests are refused until one finishes. |
 | `GALLERY_CONCURRENCY` | `4` | Carousel items downloaded at the same time. Items are copied as-is, so this mainly uses network bandwidth. |

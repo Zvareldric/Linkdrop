@@ -51,6 +51,14 @@ MAX_GALLERY_ITEMS = 20
 GALLERY_CONCURRENCY = max(1, int(os.environ.get("GALLERY_CONCURRENCY", 4)))
 BATCH_CONCURRENCY = max(1, int(os.environ.get("BATCH_CONCURRENCY", 2)))
 FFMPEG_TIMEOUT = int(os.environ.get("FFMPEG_TIMEOUT", 60 * 60))
+# Seconds one request may spend converting video to H.264. Vercel stops a
+# function after 300 seconds on the Hobby plan, so its default leaves room for
+# downloading the source and sending the result. 0 turns the check off.
+TRANSCODE_TIME_LIMIT = max(0, int(os.environ.get("TRANSCODE_TIME_LIMIT", 240 if IS_VERCEL else 0)))
+# Pixels per second that x264 (-preset fast -crf 18) encodes. A 1 vCPU Vercel
+# container converted 2560x1440 at 25 fps at about 0.18x real time, roughly 16
+# million pixels per second; the default stays slightly below that.
+TRANSCODE_PIXEL_RATE = max(1, int(os.environ.get("TRANSCODE_PIXEL_RATE", 15_000_000)))
 SUBTITLE_LANGUAGES = ("id", "en")
 SUBTITLE_SUFFIXES = {".json3", ".srt", ".vtt", ".ass", ".ssa", ".srv1", ".srv2", ".srv3", ".ttml"}
 BURNABLE_SUBTITLE_SUFFIXES = {".srt", ".vtt", ".ass", ".ssa"}
@@ -630,6 +638,31 @@ def _estimated_video_size(formats: list[dict], height: int, duration: float | No
     return video_size + (_format_size(best_audio, duration) or 0) if best_audio else video_size
 
 
+def _estimated_transcode_seconds(formats: list[dict], height: int, duration: float | None) -> float | None:
+    """Estimate how long converting the video at this height to H.264 takes."""
+
+    if not duration:
+        return None
+    candidates = [
+        fmt for fmt in formats
+        if fmt.get("vcodec") not in (None, "none") and fmt.get("height") == height
+    ]
+    source = max(candidates, key=lambda fmt: (fmt.get("width") or 0, fmt.get("fps") or 0), default={})
+    width = source.get("width") or round(height * 16 / 9)
+    fps = source.get("fps") or 30
+    return width * height * fps * duration / TRANSCODE_PIXEL_RATE
+
+
+def _hidden_reason(estimated_bytes: int | None, transcode_seconds: float | None = None) -> str | None:
+    """Return why a choice cannot finish on this server, or None when it can."""
+
+    if estimated_bytes and estimated_bytes > MAX_MEDIA_BYTES:
+        return "too_large"
+    if TRANSCODE_TIME_LIMIT and transcode_seconds and transcode_seconds > TRANSCODE_TIME_LIMIT:
+        return "too_slow"
+    return None
+
+
 def _best_audio_format(formats: list[dict]) -> dict | None:
     return max(
         (
@@ -687,7 +720,22 @@ def _choice(url: str, kind: str, label: str, detail: str, choice_id: str | None 
     }
 
 
-def _build_choices(url: str, info: dict) -> dict:
+def _build_choices(url: str, info: dict, hidden: dict | None = None) -> dict:
+    """Build the signed download choices for a media item.
+
+    Choices that cannot finish on this server, because they exceed the size
+    limit or need a conversion longer than TRANSCODE_TIME_LIMIT, are left out.
+    When ``hidden`` is a dict, it receives their labels and reasons by kind.
+    """
+
+    if hidden is None:
+        hidden = {}
+
+    def skip(kind: str, label: str, reason: str | None) -> bool:
+        if reason:
+            hidden.setdefault(kind, []).append({"label": label, "reason": reason})
+        return bool(reason)
+
     entries = _entries(info)
     image_count = sum(1 for entry in entries if _is_image(entry))
     is_gallery = len(entries) > 1 or image_count > 0
@@ -713,6 +761,7 @@ def _build_choices(url: str, info: dict) -> dict:
         estimated_bytes = _estimated_video_size(formats, height, info.get("duration"))
         size = _pretty_bytes(estimated_bytes)
         size_text = f" · sekitar {size}" if size else " · ukuran dihitung saat mengunduh"
+        transcode_seconds = None
         if any(_is_h264(fmt) and fmt.get("height") == height for fmt in formats):
             # The source already offers H.264 here, so the MP4 is the original stream.
             detail = "MP4 · kualitas asli" + size_text
@@ -720,6 +769,9 @@ def _build_choices(url: str, info: dict) -> dict:
             # Only VP9/AV1 exists at this resolution (common above 1080p), so the
             # video is converted to H.264 to deliver an MP4.
             detail = "MP4 · dikonversi ulang · lebih lama" + size_text
+            transcode_seconds = _estimated_transcode_seconds(formats, height, info.get("duration"))
+        if skip("video", f"{height}p", _hidden_reason(estimated_bytes, transcode_seconds)):
+            continue
         video_choices.append(_choice(
             url, "video", f"{height}p", detail,
             choice_id=f"video:{height}", height=height, estimated_bytes=estimated_bytes,
@@ -745,15 +797,18 @@ def _build_choices(url: str, info: dict) -> dict:
                 "tanpa konversi",
                 f"sekitar {size}" if size else None,
             ]))
-            audio_choices.append(_choice(
-                url, "audio", "Audio asli", detail,
-                choice_id="audio:source", codec="source",
-                format_id=str(original_audio.get("format_id") or ""), estimated_bytes=estimated_bytes,
-            ))
+            if not skip("audio", "Audio asli", _hidden_reason(estimated_bytes)):
+                audio_choices.append(_choice(
+                    url, "audio", "Audio asli", detail,
+                    choice_id="audio:source", codec="source",
+                    format_id=str(original_audio.get("format_id") or ""), estimated_bytes=estimated_bytes,
+                ))
 
         for bitrate in (128, 192, 320):
             estimated_bytes = int(bitrate * 1000 * duration / 8) if duration else None
             size = _pretty_bytes(estimated_bytes)
+            if skip("audio", f"MP3 {bitrate} kbps", _hidden_reason(estimated_bytes)):
+                continue
             audio_choices.append(_choice(
                 url, "audio", f"MP3 {bitrate} kbps",
                 f"MP3 · {bitrate} kbps · dikonversi" + (f" · sekitar {size}" if size else ""),
@@ -819,7 +874,8 @@ def _media_payload(url: str, info: dict) -> dict:
     thumbnail = info.get("thumbnail")
     if not thumbnail and entries:
         thumbnail = entries[0].get("thumbnail")
-    choices = _build_choices(url, info)
+    hidden_choices = {}
+    choices = _build_choices(url, info, hidden_choices)
 
     return {
         "title": info.get("title") or info.get("description") or "Media tanpa judul",
@@ -829,6 +885,7 @@ def _media_payload(url: str, info: dict) -> dict:
         "platform": info.get("extractor_key") or info.get("extractor") or "Unknown",
         "item_count": len(entries),
         "choices": choices,
+        "hidden_choices": hidden_choices,
         "subtitles": _subtitle_choices(url, info) if choices["video"] else [],
         "subtitle_burn": _subtitle_burn_supported(),
         "limits": {

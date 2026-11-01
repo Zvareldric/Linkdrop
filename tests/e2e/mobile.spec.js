@@ -615,3 +615,47 @@ test("mode permanen disembunyikan jika server tidak bisa membakar subtitle", asy
   await expect(page.getByText("FFmpeg-nya dibuat tanpa libass")).toBeVisible();
   await expect(page.getByRole("link", { name: /720p \+ subtitle Inggris MP4/ })).toHaveAttribute("href", "/api/download/mock?subtitle=sub-en");
 });
+
+test("pilihan yang tidak bisa selesai di server ini dijelaskan", async ({ page }) => {
+  await page.route("**/api/info", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      ...mediaPayload,
+      limits: { max_file_mb: 220, token_minutes: 15 },
+      hidden_choices: {
+        video: [
+          { label: "960p", reason: "too_large" },
+          { label: "1280p", reason: "too_slow" },
+          { label: "1920p", reason: "too_slow" }
+        ]
+      }
+    })
+  }));
+
+  await page.getByLabel("Tempel link media").fill("https://example.com/video");
+  await page.getByRole("button", { name: "Lihat pilihan" }).click();
+  await expect(page.getByRole("link", { name: /720p/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /1280p/ })).toHaveCount(0);
+  await expect(page.getByText("960p tidak ditampilkan karena melebihi batas 220 MB server ini.")).toBeVisible();
+  await expect(page.getByText("1280p, 1920p tidak ditampilkan karena konversinya terlalu lama")).toBeVisible();
+});
+
+test("tab tetap aktif untuk menjelaskan bila semua pilihannya disembunyikan", async ({ page }) => {
+  await page.route("**/api/info", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      ...richMediaPayload,
+      choices: { ...richMediaPayload.choices, video: [] },
+      hidden_choices: { video: [{ label: "2160p", reason: "too_slow" }] }
+    })
+  }));
+
+  await page.getByLabel("Tempel link media").fill("https://example.com/video");
+  await page.getByRole("button", { name: "Lihat pilihan" }).click();
+  await expect(page.getByRole("link", { name: /MP3 128 kbps/ })).toBeVisible();
+  await expect(page.locator("#choicesNote")).toBeHidden();
+  await page.getByRole("button", { name: "Video" }).click();
+  await expect(page.getByText("2160p tidak ditampilkan karena konversinya terlalu lama")).toBeVisible();
+});
